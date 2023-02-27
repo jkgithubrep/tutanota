@@ -200,6 +200,10 @@ pipeline {
 					} // catchError
 					sh "rm notes.txt"
 				} // script
+
+				script {
+					currentBuild.displayName = "${VERSION}"
+				}
 			}
 		}
 	}

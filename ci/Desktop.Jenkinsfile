@@ -255,6 +255,9 @@ pipeline {
 					)
 				} // script upload to nexus
 
+				script {
+					currentBuild.displayName = "${VERSION}"
+				}
 			} // steps
 		} // stage build deb & publish
     } // stages

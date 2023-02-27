@@ -124,6 +124,14 @@ pipeline {
 				} // stage desktop client
 			} // parallel clients
 		} // stage other clients
+		stage("Set Build Name") {
+			when { expression { !params.dryRun } }
+			steps {
+				script {
+					currentBuild.displayName = "${VERSION}"
+				} // script
+			} // steps
+		} // stage set build name
     } // stages
 } // pipeline
 

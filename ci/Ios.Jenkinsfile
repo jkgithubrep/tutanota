@@ -105,6 +105,10 @@ pipeline {
 							publishToNexus("ios", "tutanota-${VERSION}-adhoc.ipa")
 						}
 					}
+
+					script {
+						currentBuild.displayName = "${VERSION}"
+					}
 				}
 			}
 		}

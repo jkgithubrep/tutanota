@@ -91,6 +91,9 @@ pipeline {
         }
 
         stage('Publish npm modules') {
+        	environment {
+         		VERSION = sh(returnStdout: true, script: "node -p -e \"require('./package.json').version\" | tr -d \"\n\"")
+         	}
 			when {
 				expression { params.RELEASE }
 			}
@@ -104,6 +107,10 @@ pipeline {
 					withCredentials([string(credentialsId: 'npm-token',variable: 'NPM_TOKEN')]) {
 						sh "npm --workspaces publish --access public"
 					}
+				}
+
+				script {
+					currentBuild.displayName = "${VERSION}"
 				}
 			}
         }
