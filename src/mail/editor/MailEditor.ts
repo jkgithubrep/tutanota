@@ -16,7 +16,6 @@ import {
 	LINE_BREAK,
 	RecipientField,
 } from "../model/MailUtils"
-import { PermissionError } from "../../api/common/error/PermissionError"
 import { locator } from "../../api/main/MainLocator"
 import { logins } from "../../api/main/LoginController"
 import { ALLOWED_IMAGE_FORMATS, ConversationType, FeatureType, Keys, MailMethod } from "../../api/common/TutanotaConstants"
