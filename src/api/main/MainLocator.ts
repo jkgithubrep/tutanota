@@ -86,7 +86,7 @@ import { OperationProgressTracker } from "./OperationProgressTracker.js"
 import { WorkerFacade } from "../worker/facades/WorkerFacade.js"
 import { InfoMessageHandler } from "../../gui/InfoMessageHandler.js"
 import { OfflineIndicatorViewModel } from "../../gui/base/OfflineIndicatorViewModel.js"
-import { BaseHeaderAttrs } from "../../gui/Header.js"
+import { BaseHeaderAttrs, Header } from "../../gui/Header.js"
 import { CalendarViewModel } from "../../calendar/view/CalendarViewModel.js"
 import { ReceivedGroupInvitationsModel } from "../../sharing/model/ReceivedGroupInvitationsModel.js"
 import { GroupType } from "../common/TutanotaConstants.js"
@@ -110,6 +110,8 @@ class MainLocator {
 	secondFactorHandler!: SecondFactorHandler
 	webAuthn!: WebauthnClient
 	loginFacade!: LoginFacade
+	logins!: LoginController
+	header!: Header
 	customerFacade!: CustomerFacade
 	giftCardFacade!: GiftCardFacade
 	groupManagementFacade!: GroupManagementFacade
@@ -150,8 +152,7 @@ class MainLocator {
 	private entropyFacade!: EntropyFacade
 
 	async loginController(): Promise<LoginController> {
-		const { logins } = await import("./LoginController.js")
-		return logins
+		return this.logins
 	}
 
 	async recipientsModel(): Promise<RecipientsModel> {
@@ -468,8 +469,11 @@ class MainLocator {
 		this.contactFormFacade = contactFormFacade
 		this.deviceEncryptionFacade = deviceEncryptionFacade
 		this.serviceExecutor = serviceExecutor
-		const logins = await this.loginController()
-		this.eventController = new EventController(logins)
+		this.logins = new LoginController()
+		// Should be called elsewhere later e.g. in mainLocator
+		this.logins.init()
+		this.header = new Header(this.logins)
+		this.eventController = new EventController(this.logins)
 		this.progressTracker = new ProgressTracker()
 		this.search = new SearchModel(this.searchFacade)
 		this.entityClient = new EntityClient(restInterface)
@@ -478,7 +482,7 @@ class MainLocator {
 		this.entropyFacade = entropyFacade
 		this.workerFacade = workerFacade
 		this.connectivityModel = new WebsocketConnectivityModel(eventBus)
-		this.mailModel = new MailModel(notifications, this.eventController, this.connectivityModel, this.mailFacade, this.entityClient, logins)
+		this.mailModel = new MailModel(notifications, this.eventController, this.connectivityModel, this.mailFacade, this.entityClient, this.logins)
 		this.operationProgressTracker = new OperationProgressTracker()
 		this.infoMessageHandler = new InfoMessageHandler(this.search)
 
@@ -492,11 +496,12 @@ class MainLocator {
 			this.nativeInterfaces = createNativeInterfaces(
 				new WebMobileFacade(this.connectivityModel, this.mailModel),
 				new WebDesktopFacade(),
-				new WebInterWindowEventFacade(logins, windowFacade),
+				new WebInterWindowEventFacade(this.logins, windowFacade),
 				new WebCommonNativeFacade(),
 				cryptoFacade,
 				calendarFacade,
 				this.entityClient,
+				this.logins,
 			)
 
 			if (isElectronClient()) {
@@ -544,7 +549,7 @@ class MainLocator {
 			},
 			this.serviceExecutor,
 			this.entityClient,
-			logins,
+			this.logins,
 			this.eventController,
 			() => this.usageTestController,
 		)
@@ -556,10 +561,10 @@ class MainLocator {
 					return new UsageOptInNews(this.newsModel, this.usageTestModel)
 				case "recoveryCode":
 					const { RecoveryCodeNews } = await import("../../misc/news/items/RecoveryCodeNews.js")
-					return new RecoveryCodeNews(this.newsModel, logins.getUserController(), this.userManagementFacade)
+					return new RecoveryCodeNews(this.newsModel, this.logins.getUserController(), this.userManagementFacade)
 				case "pinBiometrics":
 					const { PinBiometricsNews } = await import("../../misc/news/items/PinBiometricsNews.js")
-					return new PinBiometricsNews(this.newsModel, this.credentialsProvider, logins.getUserController().userId)
+					return new PinBiometricsNews(this.newsModel, this.credentialsProvider, this.logins.getUserController().userId)
 				default:
 					console.log(`No implementation for news named '${name}'`)
 					return null
@@ -582,14 +587,14 @@ class MainLocator {
 			lazyScheduler,
 			this.eventController,
 			this.serviceExecutor,
-			logins,
+			this.logins,
 			this.progressTracker,
 			this.entityClient,
 			this.mailModel,
 			this.calendarFacade,
 			this.fileController,
 		)
-		this.contactModel = new ContactModelImpl(this.searchFacade, this.entityClient, logins)
+		this.contactModel = new ContactModelImpl(this.searchFacade, this.entityClient, this.logins)
 		this.minimizedMailModel = new MinimizedMailEditorViewModel()
 		this.usageTestController = new UsageTestController(this.usageTestModel)
 	}

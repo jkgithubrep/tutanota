@@ -8,14 +8,14 @@ import { Icons } from "./icons/Icons"
 import type { DropdownChildAttrs } from "./Dropdown.js"
 import { createAsyncDropdown } from "./Dropdown.js"
 import type { $Promisable, lazy, MaybeLazy } from "@tutao/tutanota-utils"
-import { assertNotNull, lazyMemoized, mapLazily, noOp, resolveMaybeLazy } from "@tutao/tutanota-utils"
+import { assertNotNull, lazyMemoized, resolveMaybeLazy } from "@tutao/tutanota-utils"
 import { Dialog } from "./Dialog"
-import { logins } from "../../api/main/LoginController"
 import type { AllIcons } from "./Icon"
 import { ProgrammingError } from "../../api/common/error/ProgrammingError"
 import m, { Children } from "mithril"
 import { DropDownSelector } from "./DropDownSelector.js"
 import { IconButtonAttrs } from "./IconButton.js"
+import { LoginController } from "../../api/main/LoginController.js"
 
 export type dropHandler = (dragData: string) => void
 // not all browsers have the actual button as e.currentTarget, but all of them send it as a second argument (see https://github.com/tutao/tutanota/issues/1110)
@@ -173,10 +173,14 @@ export function scrollListDom(scrollDom: HTMLElement, entryHeight: number, selec
 
 /**
  * Executes the passed function if the user is allowed to see `tutanota.com` links.
+ * @param logins LoginController to ask about login information
+ * @param linkId
  * @param render receives the resolved link
  * @returns {Children|null}
  */
-export function ifAllowedTutanotaLinks(linkId: InfoLink, render: (arg0: string) => Children): Children | null {
+export function ifAllowedTutanotaLinks(logins: LoginController, linkId: InfoLink, render: (arg0: string) => Children): Children | null {
+	// this is currently in gui-base, preventing us from accessing logins ourselves.
+	// may be subject to change
 	if (logins.getUserController().isGlobalAdmin() || !logins.isWhitelabel()) {
 		return render(linkId)
 	}
