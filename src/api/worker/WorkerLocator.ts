@@ -62,6 +62,7 @@ import { Challenge } from "../entities/sys/TypeRefs.js"
 import { LoginFailReason } from "../main/PageContextLoginListener.js"
 import { ConnectionError, ServiceUnavailableError } from "../common/error/RestError.js"
 import { SessionType } from "../common/SessionType.js"
+import { DatabaseKeyFactory } from "../../misc/credentials/DatabaseKeyFactory.js"
 
 assertWorkerOrNode()
 
@@ -207,6 +208,8 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		},
 	}
 
+	locator.deviceEncryptionFacade = new DeviceEncryptionFacade()
+
 	locator.login = new LoginFacade(
 		worker,
 		locator.restClient,
@@ -222,6 +225,7 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		locator.user,
 		locator.blobAccessToken,
 		locator.entropyFacade,
+		new DatabaseKeyFactory(locator.deviceEncryptionFacade),
 	)
 
 	locator.search = lazyMemoized(async () => {
@@ -370,7 +374,6 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		const { ContactFormFacade } = await import("./facades/lazy/ContactFormFacade.js")
 		return new ContactFormFacade(locator.restClient, locator.instanceMapper)
 	})
-	locator.deviceEncryptionFacade = new DeviceEncryptionFacade()
 }
 
 const RETRY_TIMOUT_AFTER_INIT_INDEXER_ERROR_MS = 30000

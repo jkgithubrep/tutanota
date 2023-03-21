@@ -91,6 +91,7 @@ export class LateInitializedCacheStorageImpl implements CacheStorageLateInitiali
 				this.worker.sendError(e)
 			}
 		}
+		console.log("initialized new ephemeral storage")
 		// both "else" case and fallback for unavailable storage and error cases
 		const storage = new EphemeralCacheStorage()
 		await storage.init(args)

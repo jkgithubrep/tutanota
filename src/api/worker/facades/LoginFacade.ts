@@ -87,6 +87,7 @@ import { LoginIncompleteError } from "../../common/error/LoginIncompleteError.js
 import { EntropyFacade } from "./EntropyFacade.js"
 import { BlobAccessTokenFacade } from "./BlobAccessTokenFacade.js"
 import { ProgrammingError } from "../../common/error/ProgrammingError.js"
+import { DatabaseKeyFactory } from "../../../misc/credentials/DatabaseKeyFactory.js"
 
 assertWorkerOrNode()
 
@@ -95,6 +96,7 @@ export type NewSessionData = {
 	userGroupInfo: GroupInfo
 	sessionId: IdTuple
 	credentials: Credentials
+	databaseKey: Uint8Array | null
 }
 
 export type CacheInfo = {
@@ -179,6 +181,7 @@ export class LoginFacade {
 		private readonly userFacade: UserFacade,
 		private readonly blobAccessTokenFacade: BlobAccessTokenFacade,
 		private readonly entropyFacade: EntropyFacade,
+		private readonly databaseKeyFactory: DatabaseKeyFactory,
 	) {}
 
 	init(eventBusClient: EventBusClient) {
@@ -224,12 +227,21 @@ export class LoginFacade {
 		}
 		const createSessionReturn = await this.serviceExecutor.post(SessionService, createSessionData)
 		const sessionData = await this.waitUntilSecondFactorApprovedOrCancelled(createSessionReturn, mailAddress)
+
+		const forceNewDatabase = sessionType === SessionType.Persistent && databaseKey == null
+		if (forceNewDatabase) {
+			console.log("generating new database key for persistent session")
+			databaseKey = await this.databaseKeyFactory.generateKey()
+		}
+
+		console.log("initializing cache now")
 		const cacheInfo = await this.initCache({
 			userId: sessionData.userId,
 			databaseKey,
 			timeRangeDays: null,
-			forceNewDatabase: true,
+			forceNewDatabase,
 		})
+		console.log("initializing session now")
 		const { user, userGroupInfo, accessToken } = await this.initSession(
 			sessionData.userId,
 			sessionData.accessToken,
@@ -249,6 +261,7 @@ export class LoginFacade {
 				userId: sessionData.userId,
 				type: "internal",
 			},
+			databaseKey,
 		}
 	}
 
@@ -363,6 +376,7 @@ export class LoginFacade {
 				userId,
 				type: "external",
 			},
+			databaseKey: null,
 		}
 	}
 
@@ -566,6 +580,7 @@ export class LoginFacade {
 
 		try {
 			const user = await this.entityClient.load(UserTypeRef, userId)
+			console.log("loaded user", user)
 			await this.checkOutdatedPassword(user, accessToken, userPassphraseKey)
 
 			const wasPartiallyLoggedIn = this.userFacade.isPartiallyLoggedIn()
@@ -593,6 +608,7 @@ export class LoginFacade {
 			this.loginListener.onFullLoginSuccess(sessionType, cacheInfo)
 			return { user, accessToken, userGroupInfo }
 		} catch (e) {
+			console.log("failed initsession:", e)
 			this.resetSession()
 			throw e
 		}
