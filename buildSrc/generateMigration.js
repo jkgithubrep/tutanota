@@ -2,6 +2,7 @@ import fs from "fs-extra"
 import { Argument, InvalidArgumentError, program } from "commander"
 import path from "path"
 import { fileExists } from "./buildUtils.js"
+
 await program
 	.addArgument(
 		new Argument("app", "Which tutanota application needs a migration").choices(["accounting", "base", "gossip", "monitor", "storage", "sys", "tutanota"]),

@@ -16,6 +16,14 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Get better-sqlite3 cached location
+        run: |
+          echo "better_sqlite3_path=$(node buildSrc/getNativeCacheLocation.js better-sqlite3)" >> $GITHUB_ENV
+      - name: try to use cached better-sqlite3
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.better_sqlite3_path }}
+          key: ${{ env.better_sqlite3_path }}
       - name: install npm
         run: npm i -g npm@8.11.0
       - name: lint, formatting

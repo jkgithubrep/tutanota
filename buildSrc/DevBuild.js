@@ -1,8 +1,7 @@
 import path from "path"
 import fs from "fs-extra"
 import { build as esbuild } from "esbuild"
-import { getTutanotaAppVersion, runStep, sh, writeFile } from "./buildUtils.js"
-import { $ } from "zx"
+import { getTutanotaAppVersion, runStep, writeFile } from "./buildUtils.js"
 import "zx/globals"
 import * as env from "./env.js"
 import { externalTranslationsPlugin, keytarNativePlugin, libDeps, preludeEnvPlugin, sqliteNativePlugin } from "./esbuildUtils.js"
@@ -11,6 +10,7 @@ import * as LaunchHtml from "./LaunchHtml.js"
 import os from "os"
 import { checkOfflineDatabaseMigrations } from "./checkOfflineDbMigratons.js"
 import { buildRuntimePackages } from "./packageBuilderFunctions.js"
+import { sh } from "./sh.js"
 
 export async function runDevBuild({ stage, host, desktop, clean, ignoreMigrations }) {
 	if (clean) {
@@ -31,7 +31,7 @@ export async function runDevBuild({ stage, host, desktop, clean, ignoreMigration
 		await buildRuntimePackages()
 	})
 
-	const version = getTutanotaAppVersion()
+	const version = await getTutanotaAppVersion()
 
 	await runStep("Types", async () => {
 		await sh`npx tsc --incremental ${true} --noEmit true`
