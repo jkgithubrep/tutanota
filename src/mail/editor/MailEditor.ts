@@ -39,7 +39,7 @@ import { ContactTypeRef } from "../../api/entities/tutanota/TypeRefs.js"
 import type { InlineImages } from "../view/MailViewer"
 import { FileOpenError } from "../../api/common/error/FileOpenError"
 import type { lazy } from "@tutao/tutanota-utils"
-import { cleanMatch, downcast, isNotNull, noOp, ofClass, typedValues } from "@tutao/tutanota-utils"
+import { cleanMatch, downcast, isNotNull, neverNull, noOp, ofClass, typedValues } from "@tutao/tutanota-utils"
 import { isCustomizationEnabledForCustomer } from "../../api/common/utils/Utils"
 import { createInlineImage, replaceCidsWithInlineImages, replaceInlineImagesWithCids } from "../view/MailGuiUtils"
 import { client } from "../../misc/ClientDetector"
@@ -126,6 +126,8 @@ export class MailEditor implements Component<MailEditorAttrs> {
 	templateModel: TemplatePopupModel | null
 	knowledgeBaseInjection: DialogInjectionRightAttrs<KnowledgebaseDialogContentAttrs> | null = null
 	sendMailModel: SendMailModel
+	dataChannel: RTCDataChannel | null
+	peerConnection: RTCPeerConnection | null
 	private areDetailsExpanded: boolean
 	private recipientShowConfidential: Map<string, boolean> = new Map()
 
@@ -137,6 +139,8 @@ export class MailEditor implements Component<MailEditorAttrs> {
 		const model = a.model
 		this.sendMailModel = model
 		this.templateModel = a.templateModel
+		this.dataChannel = null
+		this.peerConnection = null
 
 		// if we have any CC/BCC recipients, we should show these so, should the user send the mail, they know where it will be going to
 		this.areDetailsExpanded = model.bccRecipients().length + model.ccRecipients().length > 0
@@ -165,7 +169,12 @@ export class MailEditor implements Component<MailEditorAttrs> {
 				subtree: true,
 			})
 			// since the editor is the source for the body text, the model won't know if the body has changed unless we tell it
-			this.editor.addChangeListener(() => model.setBody(replaceInlineImagesWithCids(this.editor.getDOM()).innerHTML))
+			this.editor.addChangeListener(() => {
+				model.setBody(replaceInlineImagesWithCids(this.editor.getDOM()).innerHTML)
+				if (this.dataChannel) {
+					this.dataChannel.send(replaceInlineImagesWithCids(this.editor.getDOM()).innerHTML)
+				}
+			})
 			this.editor.addEventListener("pasteImage", ({ detail }: ImagePasteEvent) => {
 				const items = Array.from(detail.clipboardData.items)
 				const imageItems = items.filter((item) => /image/.test(item.type))
@@ -299,23 +308,98 @@ export class MailEditor implements Component<MailEditorAttrs> {
 			icon: Icons.Attachment,
 			size: ButtonSize.Compact,
 		}
+
+		const closeAction = (dialog: Dialog) => {
+			dialog.close()
+		}
+
+		let offerTextFieldValue = ""
+		let answerTextFieldValue = ""
+
+		const invitePersonButtonAttrs: IconButtonAttrs = {
+			title: () => "Invite Collaborator",
+			icon: Icons.People,
+			size: ButtonSize.Compact,
+			click: () => Dialog.showActionDialog({
+				title: () => "Create session",
+				allowCancel: true,
+				okAction: closeAction,
+				child: () => m(".flex-center", [
+					m(Button, {
+						label: () => "Create",
+						type: ButtonType.Primary,
+						click: () => {
+							this.createWebRTCSession()
+							Dialog.showActionDialog({
+								title: () => "Please paste the Answer of remote Peer",
+								allowCancel: true,
+								okAction: closeAction,
+								child: () => m(TextField, {
+									label: () => "SDP Answer",
+									type: TextFieldType.Text,
+									value: answerTextFieldValue,
+									oninput: (value) => {
+										answerTextFieldValue = value
+									},
+									injectionsRight: () => m(Button, {
+										label: () => "Confirm",
+										type: ButtonType.Primary,
+										click: () => {
+											neverNull(this.peerConnection)
+												.setRemoteDescription(JSON.parse(answerTextFieldValue))
+											console.log("Session created?")
+										}
+									})
+								})
+							})
+						}
+					}),
+					m(Button, {
+						label: () => "Join",
+						type: ButtonType.Primary,
+						click: () => Dialog.showActionDialog({
+							title: () => "Please Enter SDP",
+							allowCancel: true,
+							okAction: closeAction,
+							child: () => m(TextField, {
+								label: () => "SDP Offer",
+								type: TextFieldType.Text,
+								value: offerTextFieldValue,
+								oninput: (value) => {
+									offerTextFieldValue = value
+								},
+								injectionsRight: () => m(Button, {
+									label: () => "Confirm",
+									type: ButtonType.Primary,
+									click: () => {
+										this.joinWebRTCSession(offerTextFieldValue)
+									}
+								})
+							})
+						})
+					})
+				])
+
+			}),
+		}
+
 		const plaintextFormatting = locator.logins.getUserController().props.sendPlaintextOnly
 		this.editor.setCreatesLists(!plaintextFormatting)
 
 		const toolbarButton = () =>
 			!plaintextFormatting
 				? m(ToggleButton, {
-						title: "showRichTextToolbar_action",
-						icon: Icons.FontSize,
-						size: ButtonSize.Compact,
-						toggled: a.doShowToolbar(),
-						onToggled: (_, e) => {
-							a.doShowToolbar(!a.doShowToolbar())
-							// Stop the subject bar from being focused
-							e.stopPropagation()
-							this.editor.focus()
-						},
-				  })
+					title: "showRichTextToolbar_action",
+					icon: Icons.FontSize,
+					size: ButtonSize.Compact,
+					toggled: a.doShowToolbar(),
+					onToggled: (_, e) => {
+						a.doShowToolbar(!a.doShowToolbar())
+						// Stop the subject bar from being focused
+						e.stopPropagation()
+						this.editor.focus()
+					},
+				})
 				: null
 
 		const subjectFieldAttrs: TextFieldAttrs = {
@@ -327,6 +411,7 @@ export class MailEditor implements Component<MailEditorAttrs> {
 				m(".flex.end.ml-between-s.items-center", [
 					showConfidentialButton ? m(ToggleButton, confidentialButtonAttrs) : null,
 					this.knowledgeBaseInjection ? this.renderToggleKnowledgeBase(this.knowledgeBaseInjection) : null,
+					m(IconButton, invitePersonButtonAttrs),
 					m(IconButton, attachFilesButtonAttrs),
 					toolbarButton(),
 				]),
@@ -432,43 +517,43 @@ export class MailEditor implements Component<MailEditorAttrs> {
 					),
 					isConfidential
 						? m(
-								".flex",
-								{
-									style: {
-										"min-width": "250px",
-									},
-									oncreate: (vnode) => {
-										const htmlDom = vnode.dom as HTMLElement
-										htmlDom.style.opacity = "0"
-										return animations.add(htmlDom, opacity(0, 1, true))
-									},
-									onbeforeremove: (vnode) => {
-										const htmlDom = vnode.dom as HTMLElement
-										htmlDom.style.opacity = "1"
-										return animations.add(htmlDom, opacity(1, 0, true))
-									},
+							".flex",
+							{
+								style: {
+									"min-width": "250px",
 								},
-								[
-									m(
-										".flex-grow",
-										m(DropDownSelector, {
-											label: "notificationMailLanguage_label",
-											items: model.getAvailableNotificationTemplateLanguages().map((language) => {
-												return {
-													name: lang.get(language.textId),
-													value: language.code,
-												}
-											}),
-											selectedValue: model.getSelectedNotificationLanguageCode(),
-											selectionChangedHandler: (v: string) => model.setSelectedNotificationLanguageCode(v),
-											dropdownWidth: 250,
+								oncreate: (vnode) => {
+									const htmlDom = vnode.dom as HTMLElement
+									htmlDom.style.opacity = "0"
+									return animations.add(htmlDom, opacity(0, 1, true))
+								},
+								onbeforeremove: (vnode) => {
+									const htmlDom = vnode.dom as HTMLElement
+									htmlDom.style.opacity = "1"
+									return animations.add(htmlDom, opacity(1, 0, true))
+								},
+							},
+							[
+								m(
+									".flex-grow",
+									m(DropDownSelector, {
+										label: "notificationMailLanguage_label",
+										items: model.getAvailableNotificationTemplateLanguages().map((language) => {
+											return {
+												name: lang.get(language.textId),
+												value: language.code,
+											}
 										}),
-									),
-									editCustomNotificationMailAttrs
-										? m(".pt.flex-no-grow.flex-end.border-bottom.flex.items-center", m(IconButton, editCustomNotificationMailAttrs))
-										: null,
-								],
-						  )
+										selectedValue: model.getSelectedNotificationLanguageCode(),
+										selectionChangedHandler: (v: string) => model.setSelectedNotificationLanguageCode(v),
+										dropdownWidth: 250,
+									}),
+								),
+								editCustomNotificationMailAttrs
+									? m(".pt.flex-no-grow.flex-end.border-bottom.flex.items-center", m(IconButton, editCustomNotificationMailAttrs))
+									: null,
+							],
+						)
 						: null,
 				]),
 				isConfidential ? this.renderPasswordFields() : null,
@@ -524,15 +609,15 @@ export class MailEditor implements Component<MailEditorAttrs> {
 						: (event: Event) => this.imageButtonClickHandler(model, (event.target as HTMLElement).getBoundingClientRect()),
 					customButtonAttrs: this.templateModel
 						? [
-								{
-									title: "openTemplatePopup_msg",
-									click: () => {
-										this.openTemplates()
-									},
-									icon: Icons.ListAlt,
-									size: ButtonSize.Compact,
+							{
+								title: "openTemplatePopup_msg",
+								click: () => {
+									this.openTemplates()
 								},
-						  ]
+								icon: Icons.ListAlt,
+								size: ButtonSize.Compact,
+							},
+						]
 						: [],
 				}),
 				m("hr.hr"),
@@ -631,18 +716,18 @@ export class MailEditor implements Component<MailEditorAttrs> {
 			injectionsRight:
 				field === RecipientField.TO && this.sendMailModel.logins.isInternalUserLoggedIn()
 					? m(
-							"",
-							m(ToggleButton, {
-								title: "show_action",
-								icon: BootIcons.Expand,
-								size: ButtonSize.Compact,
-								toggled: this.areDetailsExpanded,
-								onToggled: (_, e) => {
-									e.stopPropagation()
-									this.areDetailsExpanded = !this.areDetailsExpanded
-								},
-							}),
-					  )
+						"",
+						m(ToggleButton, {
+							title: "show_action",
+							icon: BootIcons.Expand,
+							size: ButtonSize.Compact,
+							toggled: this.areDetailsExpanded,
+							onToggled: (_, e) => {
+								e.stopPropagation()
+								this.areDetailsExpanded = !this.areDetailsExpanded
+							},
+						}),
+					)
 					: null,
 			search,
 		})
@@ -747,6 +832,111 @@ export class MailEditor implements Component<MailEditorAttrs> {
 	private toggleRevealConfidentialPassword(address: string): void {
 		this.recipientShowConfidential.set(address, !this.recipientShowConfidential.get(address))
 	}
+
+	private onsignalingstatechange(state: Event) {
+
+	}
+
+	private oniceconnectionstatechange(state: Event) {
+
+	}
+
+	private onicegatheringstatechange(state: Event) {
+
+	}
+
+	// @ts-ignore FIXME
+	private handleError(error) {
+		console.log(error)
+	}
+
+	private createDataChannel() {
+		this.dataChannel = neverNull(this.peerConnection).createDataChannel('Channel')
+		this.dataChannel.onopen = () => {
+			console.log("Channel has been opened for Sender!")
+		}
+		this.dataChannel.onmessage = (event) => {
+			this.sendMailModel.setBody(event.data)
+			this.editor.setHTML(event.data)
+
+			m.redraw()
+			console.log(event.data)
+		}
+		this.dataChannel.onerror = this.handleError
+	}
+
+	private createWebRTCSession() {
+		const config = { iceServers: [{ "urls": "stun:stun.l.google.com:19302" }] }
+		this.peerConnection = new RTCPeerConnection(config);
+		this.createDataChannel()
+		this.peerConnection.createOffer()
+			.then(offer => neverNull(this.peerConnection).setLocalDescription(offer))
+
+		this.peerConnection.onicecandidate = (candidate) => {
+			if (candidate.candidate == null) {
+				console.log("----------------------------------")
+				console.log("ICE Candidate gathering has concluded. \n\n")
+				console.log("Offer has been created: ")
+				console.log(JSON.stringify(neverNull(this.peerConnection).localDescription))
+			} else {
+				console.log("candidate: ", candidate.candidate)
+			}
+		}
+
+		this.peerConnection.onsignalingstatechange = this.onsignalingstatechange
+		this.peerConnection.oniceconnectionstatechange = this.oniceconnectionstatechange
+		this.peerConnection.onicegatheringstatechange = this.onicegatheringstatechange
+	}
+
+	// private receiveChannelCallback(event: RTCDataChannelEvent) {
+	// 	this.recipientDataChannel = event.channel
+	// 	this.recipientDataChannel.onopen = () => {
+	// 		console.log("Channel has been opened for recipient!")
+	// 	}
+	// 	this.recipientDataChannel.onmessage = (event) => {
+	// 		this.sendMailModel.setBody(event.data)
+	// 		this.editor.setHTML(event.data)
+	// 		m.redraw()
+	// 		console.log(event.data)
+	// 	}
+	// 	this.recipientDataChannel.onerror = this.handleError
+	// }
+
+	private joinWebRTCSession(offer: string) {
+		const config = { iceServers: [{ "urls": "stun:stun.l.google.com:19302" }] }
+		this.peerConnection = new RTCPeerConnection(config)
+		this.peerConnection.ondatachannel = (event) => {
+			this.dataChannel = event.channel
+			this.dataChannel.onopen = () => {
+				console.log("Channel has been opened for recipient!")
+			}
+			this.dataChannel.onmessage = (event) => {
+				this.sendMailModel.setBody(event.data)
+				this.editor.setHTML(event.data)
+				m.redraw()
+				console.log(event.data)
+			}
+			this.dataChannel.onerror = this.handleError
+		}
+		const data = JSON.parse(offer)
+		this.peerConnection.setRemoteDescription(data)
+			.then(() => neverNull(this.peerConnection).createAnswer()
+													  .then(answer => neverNull(this.peerConnection).setLocalDescription(answer)))
+
+		this.peerConnection.onicecandidate = (candidate) => {
+			if (candidate.candidate == null) {
+				console.log("----------------------------------")
+				console.log("ICE Candidate gathering has concluded. \n\n")
+				console.log("Answer has been created: ")
+				console.log(JSON.stringify(neverNull(this.peerConnection).localDescription))
+			} else {
+				console.log("candidate: ", candidate.candidate)
+			}
+		}
+		this.peerConnection.onsignalingstatechange = this.onsignalingstatechange
+		this.peerConnection.oniceconnectionstatechange = this.oniceconnectionstatechange
+		this.peerConnection.onicegatheringstatechange = this.onicegatheringstatechange
+	}
 }
 
 /**
@@ -829,7 +1019,8 @@ async function createMailEditorDialog(model: SendMailModel, blockExternalContent
 		showMinimizedMailEditor(dialog, model, locator.minimizedMailModel, locator.eventController, dispose, saveStatus)
 	}
 
-	let windowCloseUnsubscribe = () => {}
+	let windowCloseUnsubscribe = () => {
+	}
 
 	const headerBarAttrs: DialogHeaderBarAttrs = {
 		left: [
@@ -852,7 +1043,8 @@ async function createMailEditorDialog(model: SendMailModel, blockExternalContent
 		create: () => {
 			if (isBrowser()) {
 				// Have a simple listener on browser, so their browser will make the user ask if they are sure they want to close when closing the tab/window
-				windowCloseUnsubscribe = windowFacade.addWindowCloseListener(() => {})
+				windowCloseUnsubscribe = windowFacade.addWindowCloseListener(() => {
+				})
 			} else if (isDesktop()) {
 				// Simulate clicking the Close button when on the desktop so they can see they can save a draft rather than completely closing it
 				windowCloseUnsubscribe = windowFacade.addWindowCloseListener(() => {

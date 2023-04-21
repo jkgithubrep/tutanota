@@ -56,7 +56,8 @@
 		"qrcode-svg": "1.0.0",
 		"squire-rte": "2.0.1",
 		"systemjs": "6.10.2",
-		"winreg": "1.2.4"
+		"winreg": "1.2.4",
+		"wrtc": "^0.4.7"
 	},
 	"devDependencies": {
 		"@electron/notarize": "1.2.3",
