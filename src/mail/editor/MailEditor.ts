@@ -867,7 +867,7 @@ export class MailEditor implements Component<MailEditorAttrs> {
 
 	private createWebRTCSession() {
 		const config = { iceServers: [{ "urls": "stun:stun.l.google.com:19302" }] }
-		this.peerConnection = new RTCPeerConnection(config);
+		this.peerConnection = new RTCPeerConnection(config)
 		this.createDataChannel()
 		this.peerConnection.createOffer()
 			.then(offer => neverNull(this.peerConnection).setLocalDescription(offer))
@@ -887,20 +887,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 		this.peerConnection.oniceconnectionstatechange = this.oniceconnectionstatechange
 		this.peerConnection.onicegatheringstatechange = this.onicegatheringstatechange
 	}
-
-	// private receiveChannelCallback(event: RTCDataChannelEvent) {
-	// 	this.recipientDataChannel = event.channel
-	// 	this.recipientDataChannel.onopen = () => {
-	// 		console.log("Channel has been opened for recipient!")
-	// 	}
-	// 	this.recipientDataChannel.onmessage = (event) => {
-	// 		this.sendMailModel.setBody(event.data)
-	// 		this.editor.setHTML(event.data)
-	// 		m.redraw()
-	// 		console.log(event.data)
-	// 	}
-	// 	this.recipientDataChannel.onerror = this.handleError
-	// }
 
 	private joinWebRTCSession(offer: string) {
 		const config = { iceServers: [{ "urls": "stun:stun.l.google.com:19302" }] }
