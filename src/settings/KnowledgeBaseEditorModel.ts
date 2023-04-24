@@ -12,7 +12,7 @@ import { UserError } from "../api/main/UserError"
 import type { KnowledgeBaseEntryKeyword } from "../api/entities/tutanota/TypeRefs.js"
 import { createKnowledgeBaseEntryKeyword } from "../api/entities/tutanota/TypeRefs.js"
 
-export class KnowledgeBaseEditorModel {
+	export class KnowledgeBaseEditorModel {
 	title: Stream<string>
 	keywords: Stream<string>
 	private readonly _entityClient: EntityClient
