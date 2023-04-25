@@ -53,6 +53,8 @@
 		"linkifyjs": "3.0.5",
 		"luxon": "3.2.1",
 		"mithril": "2.2.2",
+		"prosemirror-commands": "^1.5.1",
+		"prosemirror-example-setup": "^1.2.1",
 		"prosemirror-model": "^1.19.0",
 		"prosemirror-state": "^1.4.2",
 		"prosemirror-view": "^1.30.2",

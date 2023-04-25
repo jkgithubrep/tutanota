@@ -1,14 +1,16 @@
 import m, { Children, Component, Vnode } from "mithril"
 import { CollaborativeEditorModel } from "./CollaborativeEditorModel.js"
-import { Schema } from "prosemirror-model"
+import { DOMOutputSpec, Schema } from "prosemirror-model"
 import { EditorView } from "prosemirror-view"
+import { pcBaseKeymap } from "prosemirror-commands"
 import { EditorState } from "prosemirror-state"
 import { TabIndex } from "../api/common/TutanotaConstants.js"
 import { DialogHeaderBarAttrs } from "../gui/base/DialogHeaderBar.js"
 import { ButtonType } from "../gui/base/Button.js"
 import { Dialog } from "../gui/base/Dialog.js"
+import { keymap } from "prosemirror-keymap"
 
-export function showCollaborativeEditor(): void  {
+export function showCollaborativeEditor(): void {
 	const editorModel = new CollaborativeEditorModel()
 
 	const closeDialog = () => {
@@ -41,6 +43,10 @@ export function showCollaborativeEditor(): void  {
 	dialog.show()
 }
 
+const pDOM: DOMOutputSpec = ["p", 0], blockquoteDOM: DOMOutputSpec = ["blockquote", 0],
+	hrDOM: DOMOutputSpec = ["hr"], preDOM: DOMOutputSpec = ["pre", ["code", 0]],
+	brDOM: DOMOutputSpec = ["br"]
+
 class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 	editorView: EditorView | null
 	schema: Schema
@@ -48,8 +54,34 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 	constructor() {
 		this.schema = new Schema({
 			nodes: {
-				text: {},
-				doc: {content: "text*"}
+				doc: { content: "block+" },
+				text: { group: "inline" },
+				paragraph: {
+					content: "text*",
+					group: "block",
+					parseDOM: [{ tag: "p" }],
+					toDOM() {
+						return pDOM
+					}
+				},
+				blockquote: {
+					content: "block+",
+					group: "block",
+					defining: true,
+					parseDOM: [{ tag: "blockquote" }],
+					toDOM() {
+						return blockquoteDOM
+					}
+				},
+				hard_break: {
+					inline: true,
+					group: "inline",
+					selectable: false,
+					parseDOM: [{ tag: "br" }],
+					toDOM() {
+						return brDOM
+					}
+				}
 			}
 		})
 		this.editorView = null
@@ -68,8 +100,15 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 	initEditor(domElement: HTMLElement) {
 		this.editorView = new EditorView(domElement, {
 			state: EditorState.create({
-				schema: this.schema
+				schema: this.schema,
+				plugins: this.createKeymap(this.schema)
 			})
 		})
+	}
+
+	createKeymap(schema: Schema) {
+		return [
+			keymap(pcBaseKeymap)
+		]
 	}
 }
