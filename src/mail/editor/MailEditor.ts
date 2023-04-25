@@ -126,8 +126,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 	templateModel: TemplatePopupModel | null
 	knowledgeBaseInjection: DialogInjectionRightAttrs<KnowledgebaseDialogContentAttrs> | null = null
 	sendMailModel: SendMailModel
-	dataChannel: RTCDataChannel | null
-	peerConnection: RTCPeerConnection | null
 	private areDetailsExpanded: boolean
 	private recipientShowConfidential: Map<string, boolean> = new Map()
 
@@ -139,8 +137,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 		const model = a.model
 		this.sendMailModel = model
 		this.templateModel = a.templateModel
-		this.dataChannel = null
-		this.peerConnection = null
 
 		// if we have any CC/BCC recipients, we should show these so, should the user send the mail, they know where it will be going to
 		this.areDetailsExpanded = model.bccRecipients().length + model.ccRecipients().length > 0
@@ -171,9 +167,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 			// since the editor is the source for the body text, the model won't know if the body has changed unless we tell it
 			this.editor.addChangeListener(() => {
 				model.setBody(replaceInlineImagesWithCids(this.editor.getDOM()).innerHTML)
-				if (this.dataChannel) {
-					this.dataChannel.send(replaceInlineImagesWithCids(this.editor.getDOM()).innerHTML)
-				}
 			})
 			this.editor.addEventListener("pasteImage", ({ detail }: ImagePasteEvent) => {
 				const items = Array.from(detail.clipboardData.items)
@@ -309,80 +302,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 			size: ButtonSize.Compact,
 		}
 
-		const closeAction = (dialog: Dialog) => {
-			dialog.close()
-		}
-
-		let offerTextFieldValue = ""
-		let answerTextFieldValue = ""
-
-		const invitePersonButtonAttrs: IconButtonAttrs = {
-			title: () => "Invite Collaborator",
-			icon: Icons.People,
-			size: ButtonSize.Compact,
-			click: () => Dialog.showActionDialog({
-				title: () => "Create session",
-				allowCancel: true,
-				okAction: closeAction,
-				child: () => m(".flex-center", [
-					m(Button, {
-						label: () => "Create",
-						type: ButtonType.Primary,
-						click: () => {
-							this.createWebRTCSession()
-							Dialog.showActionDialog({
-								title: () => "Please paste the Answer of remote Peer",
-								allowCancel: true,
-								okAction: closeAction,
-								child: () => m(TextField, {
-									label: () => "SDP Answer",
-									type: TextFieldType.Text,
-									value: answerTextFieldValue,
-									oninput: (value) => {
-										answerTextFieldValue = value
-									},
-									injectionsRight: () => m(Button, {
-										label: () => "Confirm",
-										type: ButtonType.Primary,
-										click: () => {
-											neverNull(this.peerConnection)
-												.setRemoteDescription(JSON.parse(answerTextFieldValue))
-											console.log("Session created?")
-										}
-									})
-								})
-							})
-						}
-					}),
-					m(Button, {
-						label: () => "Join",
-						type: ButtonType.Primary,
-						click: () => Dialog.showActionDialog({
-							title: () => "Please Enter SDP",
-							allowCancel: true,
-							okAction: closeAction,
-							child: () => m(TextField, {
-								label: () => "SDP Offer",
-								type: TextFieldType.Text,
-								value: offerTextFieldValue,
-								oninput: (value) => {
-									offerTextFieldValue = value
-								},
-								injectionsRight: () => m(Button, {
-									label: () => "Confirm",
-									type: ButtonType.Primary,
-									click: () => {
-										this.joinWebRTCSession(offerTextFieldValue)
-									}
-								})
-							})
-						})
-					})
-				])
-
-			}),
-		}
-
 		const plaintextFormatting = locator.logins.getUserController().props.sendPlaintextOnly
 		this.editor.setCreatesLists(!plaintextFormatting)
 
@@ -411,7 +330,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 				m(".flex.end.ml-between-s.items-center", [
 					showConfidentialButton ? m(ToggleButton, confidentialButtonAttrs) : null,
 					this.knowledgeBaseInjection ? this.renderToggleKnowledgeBase(this.knowledgeBaseInjection) : null,
-					m(IconButton, invitePersonButtonAttrs),
 					m(IconButton, attachFilesButtonAttrs),
 					toolbarButton(),
 				]),
@@ -831,97 +749,6 @@ export class MailEditor implements Component<MailEditorAttrs> {
 
 	private toggleRevealConfidentialPassword(address: string): void {
 		this.recipientShowConfidential.set(address, !this.recipientShowConfidential.get(address))
-	}
-
-	private onsignalingstatechange(state: Event) {
-
-	}
-
-	private oniceconnectionstatechange(state: Event) {
-
-	}
-
-	private onicegatheringstatechange(state: Event) {
-
-	}
-
-	// @ts-ignore FIXME
-	private handleError(error) {
-		console.log(error)
-	}
-
-	private createDataChannel() {
-		this.dataChannel = neverNull(this.peerConnection).createDataChannel('Channel')
-		this.dataChannel.onopen = () => {
-			console.log("Channel has been opened for Sender!")
-		}
-		this.dataChannel.onmessage = (event) => {
-			this.sendMailModel.setBody(event.data)
-			this.editor.setHTML(event.data)
-
-			m.redraw()
-			console.log(event.data)
-		}
-		this.dataChannel.onerror = this.handleError
-	}
-
-	private createWebRTCSession() {
-		const config = { iceServers: [{ "urls": "stun:stun.l.google.com:19302" }] }
-		this.peerConnection = new RTCPeerConnection(config)
-		this.createDataChannel()
-		this.peerConnection.createOffer()
-			.then(offer => neverNull(this.peerConnection).setLocalDescription(offer))
-
-		this.peerConnection.onicecandidate = (candidate) => {
-			if (candidate.candidate == null) {
-				console.log("----------------------------------")
-				console.log("ICE Candidate gathering has concluded. \n\n")
-				console.log("Offer has been created: ")
-				console.log(JSON.stringify(neverNull(this.peerConnection).localDescription))
-			} else {
-				console.log("candidate: ", candidate.candidate)
-			}
-		}
-
-		this.peerConnection.onsignalingstatechange = this.onsignalingstatechange
-		this.peerConnection.oniceconnectionstatechange = this.oniceconnectionstatechange
-		this.peerConnection.onicegatheringstatechange = this.onicegatheringstatechange
-	}
-
-	private joinWebRTCSession(offer: string) {
-		const config = { iceServers: [{ "urls": "stun:stun.l.google.com:19302" }] }
-		this.peerConnection = new RTCPeerConnection(config)
-		this.peerConnection.ondatachannel = (event) => {
-			this.dataChannel = event.channel
-			this.dataChannel.onopen = () => {
-				console.log("Channel has been opened for recipient!")
-			}
-			this.dataChannel.onmessage = (event) => {
-				this.sendMailModel.setBody(event.data)
-				this.editor.setHTML(event.data)
-				m.redraw()
-				console.log(event.data)
-			}
-			this.dataChannel.onerror = this.handleError
-		}
-		const data = JSON.parse(offer)
-		this.peerConnection.setRemoteDescription(data)
-			.then(() => neverNull(this.peerConnection).createAnswer()
-													  .then(answer => neverNull(this.peerConnection).setLocalDescription(answer)))
-
-		this.peerConnection.onicecandidate = (candidate) => {
-			if (candidate.candidate == null) {
-				console.log("----------------------------------")
-				console.log("ICE Candidate gathering has concluded. \n\n")
-				console.log("Answer has been created: ")
-				console.log(JSON.stringify(neverNull(this.peerConnection).localDescription))
-			} else {
-				console.log("candidate: ", candidate.candidate)
-			}
-		}
-		this.peerConnection.onsignalingstatechange = this.onsignalingstatechange
-		this.peerConnection.oniceconnectionstatechange = this.oniceconnectionstatechange
-		this.peerConnection.onicegatheringstatechange = this.onicegatheringstatechange
 	}
 }
 
