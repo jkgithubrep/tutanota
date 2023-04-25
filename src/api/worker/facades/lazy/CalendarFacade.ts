@@ -392,7 +392,9 @@ export class CalendarFacade {
 					groupRoot.index.list,
 					uint8arrayToCustomId(hashUid(uid)),
 				])
-				return await this.entityClient.load<CalendarEvent>(CalendarEventTypeRef, indexEntry.calendarEvent)
+				if (indexEntry.calendarEvent) {
+					return await this.entityClient.load<CalendarEvent>(CalendarEventTypeRef, indexEntry.calendarEvent)
+				}
 			} catch (e) {
 				if (e instanceof NotFoundError || e instanceof NotAuthorizedError) {
 					continue
