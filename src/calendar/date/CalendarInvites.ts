@@ -54,7 +54,7 @@ export async function showEventDetails(event: CalendarEvent, eventBubbleRect: Cl
 		const calendarInfos = await locator.calendarModel.loadOrCreateCalendarInfo(new NoopProgressMonitor())
 		const mailboxDetails = await locator.mailModel.getUserMailboxDetails()
 		const mailboxProerties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
-		viewModel = await locator.calenderEventViewModel(
+		viewModel = await locator.calendarEventViewModel(
 			getEventStart(latestEvent, getTimeZone()),
 			calendarInfos,
 			mailboxDetails,

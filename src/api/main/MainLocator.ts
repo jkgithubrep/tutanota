@@ -190,7 +190,7 @@ class MainLocator {
 				const mailboxDetail = await this.mailModel.getUserMailboxDetails()
 				const mailboxProperties = await this.mailModel.getMailboxProperties(mailboxDetail.mailboxGroupRoot)
 				const calendars = await calendarInfo.getAsync()
-				return this.calenderEventViewModel(getEventStart(event, getTimeZone()), calendars, mailboxDetail, mailboxProperties, event, null, false)
+				return this.calendarEventViewModel(getEventStart(event, getTimeZone()), calendars, mailboxDetail, mailboxProperties, event, null, false)
 			},
 			this.calendarModel,
 			this.entityClient,
@@ -221,7 +221,7 @@ class MainLocator {
 			)
 	}
 
-	async calenderEventViewModel(
+	async calendarEventViewModel(
 		date: Date,
 		calendars: ReadonlyMap<Id, CalendarInfo>,
 		mailboxDetail: MailboxDetail,

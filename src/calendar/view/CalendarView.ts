@@ -780,7 +780,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 	async _createCalendarEventViewModel(event: CalendarEvent, calendarInfo: LazyLoaded<Map<Id, CalendarInfo>>): Promise<CalendarEventViewModel> {
 		const [mailboxDetails, calendarInfos] = await Promise.all([locator.mailModel.getUserMailboxDetails(), calendarInfo.getAsync()])
 		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
-		return locator.calenderEventViewModel(getEventStart(event, getTimeZone()), calendarInfos, mailboxDetails, mailboxProperties, event, null, false)
+		return locator.calendarEventViewModel(getEventStart(event, getTimeZone()), calendarInfos, mailboxDetails, mailboxProperties, event, null, false)
 	}
 
 	async _onEventSelected(calendarEvent: CalendarEvent, domEvent: MouseOrPointerEvent, htmlSanitizerPromise: Promise<HtmlSanitizer>) {

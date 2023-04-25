@@ -92,6 +92,14 @@ const alarmIntervalItems = [
 	},
 ]
 
+/**
+ * show a dialog that allows to edit a calendar event
+ * @param date the date/time that should initially selected. ignored if existingEvent exists.
+ * @param calendars list of calendars that we can select for this event
+ * @param mailboxDetail
+ * @param existingEvent optionally, event that may exist already and is edited.
+ * @param responseMail a mail containing an invite and/or update for this event?
+ */
 export async function showCalendarEventDialog(
 	date: Date,
 	calendars: ReadonlyMap<Id, CalendarInfo>,
@@ -103,7 +111,7 @@ export async function showCalendarEventDialog(
 	const recipientsSearch = await locator.recipientsSearchModel()
 	const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetail.mailboxGroupRoot)
 
-	const viewModel = await locator.calenderEventViewModel(
+	const viewModel = await locator.calendarEventViewModel(
 		date,
 		calendars,
 		mailboxDetail,
