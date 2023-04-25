@@ -231,6 +231,7 @@ export class CalendarEventPopup implements ModalComponent {
 						// will be overwritten anyway because updates are forced
 						askInsecurePassword: async () => true,
 						showProgress: noOp,
+						askEditType: async () => "all",
 					})
 					.finally(() => viewModel.isForceUpdates(false))
 

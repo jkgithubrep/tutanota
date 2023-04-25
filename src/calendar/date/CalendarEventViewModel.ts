@@ -883,10 +883,12 @@ export class CalendarEventViewModel {
 		askForUpdates,
 		askInsecurePassword,
 		showProgress,
+		askEditType,
 	}: {
 		askForUpdates: () => Promise<"yes" | "no" | "cancel">
 		askInsecurePassword: () => Promise<boolean>
 		showProgress: ShowProgressCallback
+		askEditType: () => Promise<"single" | "all" | "cancel">
 	}): Promise<EventCreateResult> {
 		await this.initialized
 
@@ -898,6 +900,15 @@ export class CalendarEventViewModel {
 		return Promise.resolve()
 			.then(async () => {
 				await this.waitForResolvedRecipients()
+
+				if (this.existingEvent?.repeatRule && this.repeat) {
+					const editType = await askEditType()
+					if (editType === "single") {
+						await this.excludeThisOccurrence()
+					} else if (editType === "cancel") {
+						return false
+					}
+				}
 
 				const newEvent = this._initializeNewEvent()
 

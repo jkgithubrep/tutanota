@@ -1647,6 +1647,11 @@ export default {
 		"yourCalendars_label": "Your calendars",
 		"yourFolders_action": "YOUR FOLDERS",
 		"yourMessage_label": "Your message",
-		"you_label": "You"
+		"you_label": "You",
+		"loadAll_action": "Load all",
+		"selectAllLoaded_action": "Select all loaded items",
+		//TODO add to phrase
+		"updateAllCalendarEvents_action": "Update all events",
+		"updateOneCalendarEvent_action": "Update this event only"
 	}
 }
