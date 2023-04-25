@@ -198,7 +198,7 @@ export async function showCalendarEventDialog(
 					ofClass(BusinessFeatureRequiredError, async (e) => {
 						const businessFeatureOrdered = await showBusinessFeatureRequiredDialog(() => e.message)
 						// entity event updates are too slow to call updateBusinessFeature()
-						viewModel.hasBusinessFeature(businessFeatureOrdered)
+						viewModel.hasBusinessFeature = businessFeatureOrdered
 						return false
 					}),
 				)
@@ -209,14 +209,14 @@ export async function showCalendarEventDialog(
 		})
 	}
 
-	const attendeesExpanded = stream(viewModel.attendees().length > 0)
+	const attendeesExpanded = stream(viewModel.attendees.length > 0)
 	const invitationFieldText = stream("")
 	const renderInvitationField = (): Children =>
 		viewModel.canModifyGuests() ? renderAddAttendeesField(invitationFieldText, viewModel, recipientsSearch) : null
 
 	function renderAttendees() {
 		const ownAttendee = viewModel.findOwnAttendee()
-		const guests = viewModel.attendees().slice()
+		const guests = viewModel.attendees.slice()
 
 		if (ownAttendee) {
 			const indexOfOwn = guests.indexOf(ownAttendee)
@@ -336,12 +336,12 @@ export async function showCalendarEventDialog(
 	const renderLocationField = () =>
 		m(TextField, {
 			label: "location_label",
-			value: viewModel.location(),
-			oninput: viewModel.location,
+			value: viewModel.location,
+			oninput: (v) => (viewModel.location = v),
 			disabled: viewModel.isReadOnlyEvent(),
 			class: "text pt-s", // override default pt with pt-s because calendar color indicator takes up some space
 			injectionsRight: () => {
-				let address = encodeURIComponent(viewModel.location())
+				let address = encodeURIComponent(viewModel.location)
 
 				if (address === "") {
 					return null
@@ -359,7 +359,7 @@ export async function showCalendarEventDialog(
 		})
 
 	function renderCalendarColor() {
-		const color = viewModel.selectedCalendar() ? groupColors.get(viewModel.selectedCalendar()!.groupInfo.group) ?? defaultCalendarColor : null
+		const color = viewModel.selectedCalendar ? groupColors.get(viewModel.selectedCalendar.groupInfo.group) ?? defaultCalendarColor : null
 		return m(".mt-xs", {
 			style: {
 				width: "100px",
@@ -382,8 +382,8 @@ export async function showCalendarEventDialog(
 								value: calendarInfo,
 							}
 						}),
-						selectedValue: viewModel.selectedCalendar(),
-						selectionChangedHandler: viewModel.selectedCalendar,
+						selectedValue: viewModel.selectedCalendar,
+						selectionChangedHandler: (v) => (viewModel.selectedCalendar = v),
 						icon: BootIcons.Expand,
 						disabled: viewModel.isReadOnlyEvent(),
 						helpLabel: () => renderCalendarColor(),
@@ -395,8 +395,6 @@ export async function showCalendarEventDialog(
 	function renderChangesMessage() {
 		return viewModel.isInvite() ? m(".mt.mb-s", lang.get("eventCopy_msg")) : null
 	}
-
-	viewModel.sendingOutUpdate.map(m.redraw)
 
 	function renderDialogContent() {
 		return m(
@@ -475,8 +473,8 @@ export async function showCalendarEventDialog(
 	function renderHeading() {
 		return m(TextField, {
 			label: "title_placeholder",
-			value: viewModel.summary(),
-			oninput: viewModel.summary,
+			value: viewModel.summary,
+			oninput: (v) => (viewModel.summary = v),
 			disabled: viewModel.isReadOnlyEvent(),
 			class: "big-input pt flex-grow",
 			injectionsRight: () =>
@@ -681,7 +679,7 @@ function renderAddAttendeesField(text: Stream<string>, viewModel: CalendarEventV
 						viewModel.addGuest(address, contact)
 					}
 
-					viewModel.hasBusinessFeature(businessFeatureOrdered) //entity event updates are too slow to call updateBusinessFeature()
+					viewModel.hasBusinessFeature = businessFeatureOrdered //entity event updates are too slow to call updateBusinessFeature()
 				} else {
 					viewModel.addGuest(address, contact)
 				}
@@ -690,7 +688,7 @@ function renderAddAttendeesField(text: Stream<string>, viewModel: CalendarEventV
 				// do nothing because we don't have any bubbles here
 			},
 			injectionsRight: [
-				viewModel.attendees().find((a) => a.type === RecipientType.EXTERNAL)
+				viewModel.attendees.find((a) => a.type === RecipientType.EXTERNAL)
 					? m(ToggleButton, {
 							title: viewModel.isConfidential() ? "confidential_action" : "nonConfidential_action",
 							onToggled: (_, e) => {
@@ -710,8 +708,8 @@ function renderAddAttendeesField(text: Stream<string>, viewModel: CalendarEventV
 					".mt-negative-s",
 					m(Checkbox, {
 						label: () => lang.get("sendUpdates_label"),
-						onChecked: (v) => viewModel.isForceUpdates(v),
-						checked: viewModel.isForceUpdates(),
+						onChecked: (v) => (viewModel.isForceUpdates = v),
+						checked: viewModel.isForceUpdates,
 					}),
 			  )
 			: null,

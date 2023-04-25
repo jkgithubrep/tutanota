@@ -224,7 +224,7 @@ export class CalendarEventPopup implements ModalComponent {
 			const confirmUpdate = await Dialog.confirm("sendUpdates_msg")
 
 			if (confirmUpdate) {
-				viewModel.isForceUpdates(true)
+				viewModel.isForceUpdates = true
 				const success: EventCreateResult = await viewModel
 					.saveAndSend({
 						askForUpdates: () => Promise.resolve("yes"),
@@ -233,7 +233,7 @@ export class CalendarEventPopup implements ModalComponent {
 						showProgress: noOp,
 						askEditType: async () => "all",
 					})
-					.finally(() => viewModel.isForceUpdates(false))
+					.finally(() => (viewModel.isForceUpdates = false))
 
 				if (success) {
 					this.close()

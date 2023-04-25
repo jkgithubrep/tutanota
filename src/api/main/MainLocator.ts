@@ -233,6 +233,12 @@ class MainLocator {
 		const { CalendarEventViewModel } = await import("../../calendar/date/CalendarEventViewModel.js")
 		const { calendarUpdateDistributor } = await import("../../calendar/date/CalendarUpdateDistributor.js")
 		const sendMailModelFactory = await this.sendMailModelSyncFactory(mailboxDetail, mailboxProperties)
+		const sendModelFactory = {
+			invite: sendMailModelFactory,
+			update: sendMailModelFactory,
+			cancel: sendMailModelFactory,
+			response: sendMailModelFactory,
+		}
 		const { getTimeZone } = await import("../../calendar/date/CalendarUtils.js")
 
 		return new CalendarEventViewModel(
@@ -242,7 +248,7 @@ class MainLocator {
 			this.entityClient,
 			mailboxDetail,
 			mailboxProperties,
-			sendMailModelFactory,
+			sendModelFactory,
 			date,
 			getTimeZone(),
 			calendars,
