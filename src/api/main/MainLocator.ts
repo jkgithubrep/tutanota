@@ -92,6 +92,7 @@ import { GroupType } from "../common/TutanotaConstants.js"
 import type { ExternalLoginViewModel } from "../../login/ExternalLoginView.js"
 import type { ConversationViewModel } from "../../mail/view/ConversationViewModel.js"
 import { AlarmScheduler } from "../../calendar/date/AlarmScheduler.js"
+import { getEventWithDefaultTimes } from "../../calendar/date/CalendarEventViewModel.js"
 
 assertMainOrNode()
 
@@ -233,26 +234,20 @@ class MainLocator {
 		const { CalendarEventViewModel } = await import("../../calendar/date/CalendarEventViewModel.js")
 		const { calendarUpdateDistributor } = await import("../../calendar/date/CalendarUpdateDistributor.js")
 		const sendMailModelFactory = await this.sendMailModelSyncFactory(mailboxDetail, mailboxProperties)
-		const sendModelFactory = {
-			invite: sendMailModelFactory,
-			update: sendMailModelFactory,
-			cancel: sendMailModelFactory,
-			response: sendMailModelFactory,
-		}
 		const { getTimeZone } = await import("../../calendar/date/CalendarUtils.js")
+		const partialExistingEvent = existingEvent == null ? getEventWithDefaultTimes() : existingEvent
 
 		return new CalendarEventViewModel(
+			partialExistingEvent,
 			this.logins.getUserController(),
 			calendarUpdateDistributor,
 			this.calendarModel,
 			this.entityClient,
 			mailboxDetail,
 			mailboxProperties,
-			sendModelFactory,
-			date,
+			sendMailModelFactory,
 			getTimeZone(),
 			calendars,
-			existingEvent,
 			previousMail,
 			resolveRecipientsLazily,
 		)

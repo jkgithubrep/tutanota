@@ -4,7 +4,7 @@ import Stream from "mithril/stream"
 import { DatePicker } from "../../gui/date/DatePicker"
 import { Dialog } from "../../gui/base/Dialog"
 import m, { Children } from "mithril"
-import { Autocomplete, TextField, TextFieldType as TextFieldType } from "../../gui/base/TextField.js"
+import { Autocomplete, TextField, TextFieldAttrs, TextFieldType as TextFieldType } from "../../gui/base/TextField.js"
 import { lang } from "../../misc/LanguageViewModel"
 import type { DropDownSelectorAttrs, SelectorItemList } from "../../gui/base/DropDownSelector.js"
 import { DropDownSelector } from "../../gui/base/DropDownSelector.js"
@@ -215,7 +215,7 @@ export async function showCalendarEventDialog(
 		viewModel.canModifyGuests() ? renderAddAttendeesField(invitationFieldText, viewModel, recipientsSearch) : null
 
 	function renderAttendees() {
-		const ownAttendee = viewModel.findOwnAttendee()
+		const ownAttendee = null // viewModel.findOwnAttendee()
 		const guests = viewModel.attendees.slice()
 
 		if (ownAttendee) {
@@ -282,7 +282,7 @@ export async function showCalendarEventDialog(
 						date: viewModel.startDate,
 						onDateSelected: (date) => {
 							if (date) {
-								viewModel.setStartDate(date)
+								// viewModel.setStartDate(date)
 							}
 						},
 						startOfTheWeekOffset,
@@ -310,7 +310,7 @@ export async function showCalendarEventDialog(
 						date: viewModel.endDate,
 						onDateSelected: (date) => {
 							if (date) {
-								viewModel.setEndDate(date)
+								// viewModel.setEndDate(date)
 							}
 						},
 						startOfTheWeekOffset,
@@ -471,10 +471,10 @@ export async function showCalendarEventDialog(
 	}
 
 	function renderHeading() {
-		return m(TextField, {
+		const attrs: TextFieldAttrs = {
 			label: "title_placeholder",
-			value: viewModel.summary,
-			oninput: (v) => (viewModel.summary = v),
+			value: "", // viewModel.summary,
+			oninput: noOp, // (v) => (viewModel.summary = v),
 			disabled: viewModel.isReadOnlyEvent(),
 			class: "big-input pt flex-grow",
 			injectionsRight: () =>
@@ -489,7 +489,8 @@ export async function showCalendarEventDialog(
 						},
 					}),
 				),
-		})
+		}
+		return m(TextField)
 	}
 
 	viewModel.attendees.map(m.redraw)
@@ -574,7 +575,7 @@ function renderExclusionCount(viewModel: CalendarEventViewModel): Children {
 function renderDeleteExclusionButton(viewModel: CalendarEventViewModel): Children {
 	return m(IconButton, {
 		title: "restoreExcludedRecurrences_action",
-		click: () => viewModel.deleteExcludedDates(),
+		click: noOp, //() => viewModel.deleteExcludedDates(),
 		icon: Icons.Cancel,
 	})
 }
@@ -585,7 +586,7 @@ function renderRepeatPeriod(viewModel: CalendarEventViewModel) {
 		label: "calendarRepeating_label",
 		items: repeatValues,
 		selectedValue: (viewModel.repeat && viewModel.repeat.frequency) || null,
-		selectionChangedHandler: (period) => viewModel.onRepeatPeriodSelected(period),
+		selectionChangedHandler: noOp, // (period) => viewModel.onRepeatPeriodSelected(period),
 		icon: BootIcons.Expand,
 		disabled: viewModel.isReadOnlyEvent(),
 	} as DropDownSelectorAttrs<RepeatPeriod | null>)
@@ -596,7 +597,7 @@ function renderRepeatInterval(viewModel: CalendarEventViewModel, intervalValues:
 		label: "interval_title",
 		items: intervalValues,
 		selectedValue: (viewModel.repeat && viewModel.repeat.interval) || 1,
-		selectionChangedHandler: (period: number) => viewModel.onRepeatIntervalChanged(period),
+		selectionChangedHandler: noOp, // (period: number) => viewModel.onRepeatIntervalChanged(period),
 		icon: BootIcons.Expand,
 		disabled: viewModel.isReadOnlyEvent(),
 	})
@@ -607,7 +608,7 @@ function renderEndType(viewModel: CalendarEventViewModel, endTypeValues: Selecto
 		label: () => lang.get("calendarRepeatStopCondition_label"),
 		items: endTypeValues,
 		selectedValue: viewModel.repeat?.endType ?? endTypeValues[0],
-		selectionChangedHandler: (period: EndType) => viewModel.onRepeatEndTypeChanged(period),
+		selectionChangedHandler: noOp, // (period: EndType) => viewModel.onRepeatEndTypeChanged(period),
 		icon: BootIcons.Expand,
 		disabled: viewModel.isReadOnlyEvent(),
 	})
@@ -621,13 +622,13 @@ function renderEndValue(viewModel: CalendarEventViewModel, intervalValues: Selec
 			label: "emptyString_msg",
 			items: intervalValues,
 			selectedValue: viewModel.repeat.endValue,
-			selectionChangedHandler: (endValue: number) => viewModel.onEndOccurencesSelected(endValue),
+			selectionChangedHandler: noOp, // (endValue: number) => viewModel.onEndOccurencesSelected(endValue),
 			icon: BootIcons.Expand,
 		})
 	} else if (viewModel.repeat.endType === EndType.UntilDate) {
 		return m(DatePicker, {
 			date: viewModel.repeat?.endValue != null ? new Date(viewModel.repeat?.endValue) : new Date(),
-			onDateSelected: (date) => viewModel.onRepeatEndDateSelected(date),
+			onDateSelected: noOp, // (date) => viewModel.onRepeatEndDateSelected(date),
 			startOfTheWeekOffset,
 			label: "emptyString_msg",
 			nullSelectionText: "emptyString_msg",
@@ -676,12 +677,12 @@ function renderAddAttendeesField(text: Stream<string>, viewModel: CalendarEventV
 				if (notAvailable) {
 					const businessFeatureOrdered = await showBusinessFeatureRequiredDialog("businessFeatureRequiredInvite_msg")
 					if (businessFeatureOrdered) {
-						viewModel.addGuest(address, contact)
+						//viewModel.addGuest(address, contact)
 					}
 
 					viewModel.hasBusinessFeature = businessFeatureOrdered //entity event updates are too slow to call updateBusinessFeature()
 				} else {
-					viewModel.addGuest(address, contact)
+					//viewModel.addGuest(address, contact)
 				}
 			},
 			onRecipientRemoved: () => {
@@ -729,7 +730,7 @@ function showOrganizerDropdown(viewModel: CalendarEventViewModel, e: MouseEvent)
 		viewModel.possibleOrganizers.map((organizer) => {
 			return {
 				label: () => organizer.address,
-				click: () => viewModel.setOrganizer(organizer),
+				click: noOp, // () => viewModel.setOrganizer(organizer),
 			}
 		})
 
@@ -804,7 +805,7 @@ function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewMo
 			]),
 			m(".flex-grow"),
 			[
-				ownAttendee === guest && viewModel.canModifyOwnAttendance()
+				ownAttendee === guest //&& viewModel.canModifyOwnAttendance()
 					? m(
 							"",
 							{
@@ -819,7 +820,7 @@ function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewMo
 								class: "",
 								selectionChangedHandler: (value: CalendarAttendeeStatus) => {
 									if (value == null) return
-									viewModel.selectGoing(value)
+									//viewModel.selectGoing(value)
 								},
 							}),
 					  )
@@ -827,7 +828,7 @@ function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewMo
 					? m(IconButton, {
 							title: "remove_action",
 							icon: Icons.Cancel,
-							click: () => viewModel.removeAttendee(guest),
+							click: noOp, //() => viewModel.removeAttendee(guest),
 					  })
 					: null,
 			],
