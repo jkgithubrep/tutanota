@@ -56,7 +56,7 @@ import { hasError } from "../../api/common/utils/ErrorCheckUtils"
 import { RecipientType } from "../../api/common/recipients/Recipient"
 import { ResolveMode } from "../../api/main/RecipientsModel.js"
 import { getSenderName } from "../../misc/MailboxPropertiesUtils.js"
-import { EventType } from "./CalendarEventEditDialogViewModel.js"
+import { EventType } from "./CalendarEventEditModel.js"
 
 // whether to close dialog
 export type EventCreateResult = boolean
@@ -1100,6 +1100,7 @@ function areRepeatRulesEqual(r1: CalendarRepeatRule | null, r2: CalendarRepeatRu
 
 /**
  * get a partial calendar event with start time set to the passed value
+ * (year, day, hours and minutes. seconds and milliseconds are zeroed.)
  * and an end time 30 minutes later than that.
  * @param startDate the start time to use for the event (defaults to the next full half hour)
  */
