@@ -57,34 +57,17 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 	sessionHandler: WebRTCSessionHandler | null
 
 	constructor() {
+		// Reduced this down to just text and paragraphs
 		this.schema = new Schema({
 			nodes: {
 				doc: { content: "block+" },
-				text: { group: "inline" },
+				text: {},
 				paragraph: {
 					content: "text*",
 					group: "block",
 					parseDOM: [{ tag: "p" }],
 					toDOM() {
 						return pDOM
-					}
-				},
-				blockquote: {
-					content: "block+",
-					group: "block",
-					defining: true,
-					parseDOM: [{ tag: "blockquote" }],
-					toDOM() {
-						return blockquoteDOM
-					}
-				},
-				hard_break: {
-					inline: true,
-					group: "inline",
-					selectable: false,
-					parseDOM: [{ tag: "br" }],
-					toDOM() {
-						return brDOM
 					}
 				}
 			}
@@ -114,17 +97,17 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 						}
 					})
 					: m(""),
-					m(IconButton, {
-						icon: Icons.Add,
-						title: () => "Create Collaborative Session",
-						click: () => {
-							this.sessionHandler = new WebRTCSessionHandler()
-							this.sessionHandler.createSession(whenClosed)
-								.then(() => {
-									this.showSessionCreationDialog(close)
-								})
-						}
-					}),
+				m(IconButton, {
+					icon: Icons.Add,
+					title: () => "Create Collaborative Session",
+					click: () => {
+						this.sessionHandler = new WebRTCSessionHandler()
+						this.sessionHandler.createSession(whenClosed)
+							.then(() => {
+								this.showSessionCreationDialog(close)
+							})
+					}
+				}),
 				m(IconButton, {
 					icon: Icons.People,
 					title: () => "Join Collaborative Session",

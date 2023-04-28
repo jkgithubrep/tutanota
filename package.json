@@ -42,6 +42,7 @@
 		"@types/mithril": "2.0.11",
 		"@types/qrcode-svg": "1.1.1",
 		"@types/systemjs": "6.1.1",
+		"@types/uuid": "^9.0.1",
 		"@types/winreg": "1.2.31",
 		"better-sqlite3": "git+https://github.com/tutao/better-sqlite3-sqlcipher#e2c61e6122bc56c6cfc29e61d21001faf43e2b8e",
 		"cborg": "1.5.4",
@@ -61,6 +62,7 @@
 		"qrcode-svg": "1.0.0",
 		"squire-rte": "2.0.1",
 		"systemjs": "6.10.2",
+		"uuid": "^9.0.0",
 		"winreg": "1.2.4",
 		"wrtc": "^0.4.7"
 	},
