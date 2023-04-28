@@ -65,8 +65,8 @@ export async function showEventDetails(event: CalendarEvent, eventBubbleRect: Cl
 		)
 
 		onEditEvent = async () => {
-			const { showCalendarEventDialog } = await import("../view/CalendarEventEditDialog")
-			showCalendarEventDialog(latestEvent.startTime, calendarInfos, mailboxDetails, latestEvent, mail ?? undefined)
+			const { showCalendarEventEditDialog } = await import("../view/eventeditor/CalendarEventEditDialog.js")
+			showCalendarEventEditDialog(latestEvent.startTime, calendarInfos, mailboxDetails, latestEvent, mail ?? undefined)
 		}
 	}
 

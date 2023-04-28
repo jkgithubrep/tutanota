@@ -278,26 +278,41 @@ export class CalendarEventViewModel {
 
 	/**
 	 * Determines the event type, the organizer of the event and possible organizers in accordance with the capabilities for events (see table).
-	 * Note that the only "real" organizer that an event can have is the owner of the calendar.
+	 * Note that the only organizer that an event can have is the owner of the calendar the event is defined in.
+	 *
+	 * it is impossible to change the guest list on events in calendars you do not own,
+	 * which means that the event has no organizer (guest list is empty) or that
+	 * the event has guests and therefore also an organizer that's not us.
+	 *
 	 * If events are created by someone we share our personal calendar with, the organizer is overwritten and set to our own primary address.
 	 * Possible organizers are all email addresses of the user, allowed to modify the organizer. This is only the owner of the calendar ("real" organizer)
 	 * and only if there are no guests.
 	 *
 	 * Capability for events is fairly complicated:
-	 * Note: share "shared" means "not owner of the calendar". Calendar always looks like personal for the owner.
+	 * Note: "shared" calendar means "not owner of the calendar". Calendar always looks like personal for the owner.
 	 *
 	 * | Calendar           | is organizer     | can edit details    | can modify own attendance | can modify guests | can modify organizer
 	 * |--------------------|------------------|---------------------|---------------------------|-------------------|----------
 	 * | Personal (own)     | yes              | yes                 | yes                       | yes               | yes
-	 * | Personal  (invite) | no               | yes (local)         | yes                       | no                | no
-	 * | Personal  (own)    | no****           | yes                 | yes                       | yes               | yes
+	 * | Personal (invite)  | no               | yes (local)         | yes                       | no                | no
+	 * | Personal (own)     | no****           | yes                 | yes                       | yes               | yes
 	 * | Shared             | yes****          | yes***              | no                        | no*               | no*
 	 * | Shared             | no               | no                  | no**                      | no*               | no*
+	 *
+	 *
+	 * | calendar  | event origin | edit details  | edit own attendance | modify attendees |
+	 * |-----------|--------------|---------------|---------------------|------------------|
+	 * | own       | calendar     | yes           | yes                 | yes              |
+	 * | own       | invite       | yes (local)   | yes                 | no               |
+	 * | shared rw | calendar     | yes           | yes                 |                  |
+	 * | shared rw | invite       |               |                     |                  |
+	 * | shared ro | calendar     | no            | no                  | no               |
+	 * | shared ro | invite       | no            | no                  | no               |
 	 *
 	 *   * we don't allow inviting guests in other people's calendar because later only organizer can modify event and
 	 *   we don't want to prevent calendar owner from editing events in their own calendar.
 	 *
-	 *   ** this is not "our" copy of the event, from the point of organizer we saw it just accidentally.
+	 *   ** this is not "our" copy of the event, from the viewpoint of the organizer we saw it just accidentally.
 	 *   Later we might support proposing ourselves as attendee but currently organizer should be asked to
 	 *   send out the event.
 	 *
@@ -480,15 +495,14 @@ export class CalendarEventViewModel {
 		//
 		// Case 1:
 		// Owner of the calendar created the event and invited some people. We, user with whom calendar was shared as RW, are seeing this event.
-		// We cannot modify that event even though we have RW permission because we are the not organizer.
-		// If the event is changed, the update must be sent out and we cannot do that because we are not the organizer.
+		// We cannot modify that event even though we have RW permission because the update must be sent out and we cannot do that because
+		// we are not the organizer.
 		//
 		// Case 2:
 		// Owner of the calendar received an invite and saved the event to the calendar. We, user with whom the calendar was shared as RW, are seeing this event.
-		// We can (theoretically) modify the event locally because we don't need to send any updates but we cannot change attendance because this would require sending an email.
-		// But we don't want to allow editing the event to make it more understandable for everyone.
-		//return this.eventType === EventType.SHARED_RO || (this.eventType === EventType.SHARED_RW && this.attendees.length > 0)
-		return true
+		// We can (theoretically) modify the event locally because we don't need to send any updates but we cannot change attendance because this would
+		// require sending an email. But we don't want to allow editing the event to make it more understandable for everyone.
+		return this.eventType === EventType.SHARED_RO || (this.eventType === EventType.SHARED_RW && this.attendees.length > 0)
 	}
 
 	addAlarm(trigger: AlarmInterval) {
@@ -944,12 +958,12 @@ export class CalendarEventViewModel {
 	}
 
 	getAvailableCalendars(): Array<CalendarInfo> {
-		// Prevent moving the calendar to another calendar if you only have read permission or if the event has attendees.
+		// Prevent moving the event to another calendar if you only have read permission or if the event has attendees.
 		const calendarArray = Array.from(this.calendars.values())
 
 		if (this.isReadOnlyEvent()) {
 			return calendarArray.filter((calendarInfo) => calendarInfo.group._id === assertNotNull(this.existingEvent)._ownerGroup)
-		} else if (this.attendees.length || this.eventType === EventType.INVITE) {
+		} else if (this.attendees.length > 0 || this.eventType === EventType.INVITE) {
 			// We don't allow inviting in a shared calendar. If we have attendees, we cannot select a shared calendar
 			// We also don't allow accepting invites into shared calendars.
 			return calendarArray.filter((calendarInfo) => !calendarInfo.shared)

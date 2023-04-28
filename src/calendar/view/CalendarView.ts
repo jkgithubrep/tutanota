@@ -38,7 +38,7 @@ import type { HtmlSanitizer } from "../../misc/HtmlSanitizer"
 import { ProgrammingError } from "../../api/common/error/ProgrammingError"
 import { calendarNavConfiguration } from "./CalendarGuiUtils"
 import { CalendarViewModel, CalendarViewType, CalendarViewTypeByValue, MouseOrPointerEvent } from "./CalendarViewModel"
-import { showCalendarEventDialog } from "./CalendarEventEditDialog"
+import { showCalendarEventEditDialog } from "./eventeditor/CalendarEventEditDialog.js"
 import { CalendarEventPopup } from "./CalendarEventPopup"
 import { showProgressDialog } from "../../gui/dialogs/ProgressDialog"
 import type { CalendarInfo } from "../model/CalendarModel"
@@ -380,7 +380,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 		}
 
 		Promise.all([calendarInfos, locator.mailModel.getUserMailboxDetails()]).then(([calendars, mailboxDetails]) =>
-			showCalendarEventDialog(dateToUse, calendars, mailboxDetails),
+			showCalendarEventEditDialog(dateToUse, calendars, mailboxDetails),
 		)
 	}
 
@@ -393,7 +393,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 				p = locator.entityClient.load(CalendarEventTypeRef, event._id)
 			}
 
-			p.then((e) => showCalendarEventDialog(getEventStart(e, getTimeZone()), calendarInfos, mailboxDetails, e)).catch(
+			p.then((e) => showCalendarEventEditDialog(getEventStart(e, getTimeZone()), calendarInfos, mailboxDetails, e)).catch(
 				ofClass(NotFoundError, () => {
 					console.log("calendar event not found when clicking on the event")
 				}),

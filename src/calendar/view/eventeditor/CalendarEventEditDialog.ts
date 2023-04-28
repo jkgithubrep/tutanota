@@ -1,50 +1,52 @@
-import { px, size } from "../../gui/size"
+import { px, size } from "../../../gui/size.js"
 import stream from "mithril/stream"
 import Stream from "mithril/stream"
-import { DatePicker } from "../../gui/date/DatePicker"
-import { Dialog } from "../../gui/base/Dialog"
+import { DatePicker } from "../../../gui/date/DatePicker.js"
+import { Dialog } from "../../../gui/base/Dialog.js"
 import m, { Children } from "mithril"
-import { Autocomplete, TextField, TextFieldAttrs, TextFieldType as TextFieldType } from "../../gui/base/TextField.js"
-import { lang } from "../../misc/LanguageViewModel"
-import type { DropDownSelectorAttrs, SelectorItemList } from "../../gui/base/DropDownSelector.js"
-import { DropDownSelector } from "../../gui/base/DropDownSelector.js"
-import { Icons } from "../../gui/base/icons/Icons"
-import { ButtonType } from "../../gui/base/Button.js"
-import { AlarmInterval, CalendarAttendeeStatus, defaultCalendarColor, EndType, Keys, RepeatPeriod } from "../../api/common/TutanotaConstants"
-import { createRepeatRuleEndTypeValues, createRepeatRuleFrequencyValues, getStartOfTheWeekOffsetForUser } from "../date/CalendarUtils"
-import { AllIcons, Icon } from "../../gui/base/Icon"
-import { BootIcons } from "../../gui/base/icons/BootIcons"
-import { Checkbox } from "../../gui/base/Checkbox.js"
-import { ExpanderButton, ExpanderPanel } from "../../gui/base/Expander"
-import { client } from "../../misc/ClientDetector"
-import type { Guest } from "../date/CalendarEventViewModel"
-import { CalendarEventViewModel } from "../date/CalendarEventViewModel"
-import { UserError } from "../../api/main/UserError"
-import { theme } from "../../gui/theme"
-import { showBusinessFeatureRequiredDialog } from "../../misc/SubscriptionDialogs"
-import { BusinessFeatureRequiredError } from "../../api/main/BusinessFeatureRequiredError"
-import type { MailboxDetail } from "../../mail/model/MailModel"
-import { showProgressDialog } from "../../gui/dialogs/ProgressDialog"
-import { CompletenessIndicator } from "../../gui/CompletenessIndicator.js"
-import { TimePicker } from "../../gui/TimePicker"
-import { getSharedGroupName } from "../../sharing/GroupUtils"
-import type { DialogHeaderBarAttrs } from "../../gui/base/DialogHeaderBar"
-import { askIfShouldSendCalendarUpdatesToAttendees } from "./CalendarGuiUtils"
-import type { CalendarInfo } from "../model/CalendarModel"
-import { showUserError } from "../../misc/ErrorHandlerImpl"
-import { RecipientType } from "../../api/common/recipients/Recipient"
-import { MailRecipientsTextField } from "../../gui/MailRecipientsTextField.js"
-import { assertNotNull, defer, noOp, numberRange, ofClass } from "@tutao/tutanota-utils"
-import { createDropdown, Dropdown, PosRect } from "../../gui/base/Dropdown.js"
-import { CalendarEvent, createEncryptedMailAddress, Mail } from "../../api/entities/tutanota/TypeRefs.js"
-import { RecipientsSearchModel } from "../../misc/RecipientsSearchModel.js"
-import type { HtmlEditor } from "../../gui/editor/HtmlEditor.js"
-import { IconButton } from "../../gui/base/IconButton.js"
-import { ButtonSize } from "../../gui/base/ButtonSize.js"
-import { ToggleButton } from "../../gui/base/ToggleButton.js"
-import { locator } from "../../api/main/MainLocator.js"
-import { findAttendeeInAddresses } from "../../api/common/utils/CommonCalendarUtils.js"
-import { modal } from "../../gui/base/Modal.js"
+import { Autocomplete, TextField, TextFieldAttrs, TextFieldType as TextFieldType } from "../../../gui/base/TextField.js"
+import { lang } from "../../../misc/LanguageViewModel.js"
+import type { DropDownSelectorAttrs, SelectorItemList } from "../../../gui/base/DropDownSelector.js"
+import { DropDownSelector } from "../../../gui/base/DropDownSelector.js"
+import { Icons } from "../../../gui/base/icons/Icons.js"
+import { ButtonType } from "../../../gui/base/Button.js"
+import { AlarmInterval, CalendarAttendeeStatus, defaultCalendarColor, EndType, Keys, RepeatPeriod } from "../../../api/common/TutanotaConstants.js"
+import { createRepeatRuleEndTypeValues, createRepeatRuleFrequencyValues, getStartOfTheWeekOffsetForUser } from "../../date/CalendarUtils.js"
+import { AllIcons, Icon } from "../../../gui/base/Icon.js"
+import { BootIcons } from "../../../gui/base/icons/BootIcons.js"
+import { Checkbox } from "../../../gui/base/Checkbox.js"
+import { ExpanderButton, ExpanderPanel } from "../../../gui/base/Expander.js"
+import { client } from "../../../misc/ClientDetector.js"
+import type { Guest } from "../../date/CalendarEventViewModel.js"
+import { CalendarEventViewModel } from "../../date/CalendarEventViewModel.js"
+import { UserError } from "../../../api/main/UserError.js"
+import { theme } from "../../../gui/theme.js"
+import { showBusinessFeatureRequiredDialog } from "../../../misc/SubscriptionDialogs.js"
+import { BusinessFeatureRequiredError } from "../../../api/main/BusinessFeatureRequiredError.js"
+import type { MailboxDetail } from "../../../mail/model/MailModel.js"
+import { showProgressDialog } from "../../../gui/dialogs/ProgressDialog.js"
+import { CompletenessIndicator } from "../../../gui/CompletenessIndicator.js"
+import { TimePicker } from "../../../gui/TimePicker.js"
+import { getSharedGroupName } from "../../../sharing/GroupUtils.js"
+import type { DialogHeaderBarAttrs } from "../../../gui/base/DialogHeaderBar.js"
+import { askIfShouldSendCalendarUpdatesToAttendees } from "../CalendarGuiUtils.js"
+import type { CalendarInfo } from "../../model/CalendarModel.js"
+import { showUserError } from "../../../misc/ErrorHandlerImpl.js"
+import { RecipientType } from "../../../api/common/recipients/Recipient.js"
+import { MailRecipientsTextField } from "../../../gui/MailRecipientsTextField.js"
+import { assertNotNull, defer, neverNull, noOp, numberRange, ofClass } from "@tutao/tutanota-utils"
+import { createDropdown, Dropdown, PosRect } from "../../../gui/base/Dropdown.js"
+import { CalendarEvent, createEncryptedMailAddress, Mail } from "../../../api/entities/tutanota/TypeRefs.js"
+import { RecipientsSearchModel } from "../../../misc/RecipientsSearchModel.js"
+import type { HtmlEditor } from "../../../gui/editor/HtmlEditor.js"
+import { IconButton } from "../../../gui/base/IconButton.js"
+import { ButtonSize } from "../../../gui/base/ButtonSize.js"
+import { ToggleButton } from "../../../gui/base/ToggleButton.js"
+import { locator } from "../../../api/main/MainLocator.js"
+import { findAttendeeInAddresses } from "../../../api/common/utils/CommonCalendarUtils.js"
+import { modal } from "../../../gui/base/Modal.js"
+import { CalendarEventEditModel } from "../../date/CalendarEventEditModel.js"
+import { EventTimeEditor } from "./EventTimeEditor.js"
 
 export const iconForAttendeeStatus: Record<CalendarAttendeeStatus, AllIcons> = Object.freeze({
 	[CalendarAttendeeStatus.ACCEPTED]: Icons.CircleCheckmark,
@@ -100,18 +102,24 @@ const alarmIntervalItems = [
  * @param existingEvent optionally, event that may exist already and is edited.
  * @param responseMail a mail containing an invite and/or update for this event?
  */
-export async function showCalendarEventDialog(
+export async function showCalendarEventEditDialog(
 	date: Date,
 	calendars: ReadonlyMap<Id, CalendarInfo>,
 	mailboxDetail: MailboxDetail,
 	existingEvent?: CalendarEvent,
 	responseMail?: Mail,
 ) {
-	const { HtmlEditor } = await import("../../gui/editor/HtmlEditor")
+	const { HtmlEditor } = await import("../../../gui/editor/HtmlEditor.js")
 	const recipientsSearch = await locator.recipientsSearchModel()
 	const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetail.mailboxGroupRoot)
+	const selectedCalendar = existingEvent == null ? Array.from(calendars.values())[0] : calendars.get(neverNull(existingEvent._ownerGroup))
+	const editModel = new CalendarEventEditModel(
+		existingEvent ?? {},
+		selectedCalendar.group._id,
+		mailboxProperties.mailAddressProperties.map(({ mailAddress, senderName }) => createEncryptedMailAddress({ address: mailAddress, name: senderName })),
+	)
 
-	const viewModel = await locator.calendarEventViewModel(
+	const viewModel: CalendarEventViewModel = await locator.calendarEventViewModel(
 		date,
 		calendars,
 		mailboxDetail,
@@ -232,8 +240,8 @@ export async function showCalendarEventDialog(
 					name: organizer.name,
 					address: organizer.address,
 				}),
-				type: RecipientType.EXTERNAL,
 				// Events created by Tutanota will always have the organizer in the attendee list
+				type: RecipientType.EXTERNAL,
 				status: CalendarAttendeeStatus.ADDED, // We don't know whether the organizer will be attending or not in this case
 			})
 		}
@@ -272,66 +280,6 @@ export async function showCalendarEventDialog(
 			size: ButtonSize.Compact,
 		})
 	}
-
-	const renderDateTimePickers = () =>
-		renderTwoColumnsIfFits(
-			[
-				m(
-					".flex-grow",
-					m(DatePicker, {
-						date: viewModel.startDate,
-						onDateSelected: (date) => {
-							if (date) {
-								// viewModel.setStartDate(date)
-							}
-						},
-						startOfTheWeekOffset,
-						label: "dateFrom_label",
-						nullSelectionText: "emptyString_msg",
-						disabled: viewModel.isReadOnlyEvent(),
-					}),
-				),
-				!viewModel.allDay
-					? m(
-							".ml-s.time-field",
-							m(TimePicker, {
-								time: viewModel.startTime,
-								onTimeSelected: (time) => viewModel.setStartTime(time),
-								amPmFormat: viewModel.amPmFormat,
-								disabled: viewModel.isReadOnlyEvent(),
-							}),
-					  )
-					: null,
-			],
-			[
-				m(
-					".flex-grow",
-					m(DatePicker, {
-						date: viewModel.endDate,
-						onDateSelected: (date) => {
-							if (date) {
-								// viewModel.setEndDate(date)
-							}
-						},
-						startOfTheWeekOffset,
-						label: "dateTo_label",
-						nullSelectionText: "emptyString_msg",
-						disabled: viewModel.isReadOnlyEvent(),
-					}),
-				),
-				!viewModel.allDay
-					? m(
-							".ml-s.time-field",
-							m(TimePicker, {
-								time: viewModel.endTime,
-								onTimeSelected: (time) => viewModel.setEndTime(time),
-								amPmFormat: viewModel.amPmFormat,
-								disabled: viewModel.isReadOnlyEvent(),
-							}),
-					  )
-					: null,
-			],
-		)
 
 	const renderLocationField = () =>
 		m(TextField, {
@@ -423,7 +371,7 @@ export async function showCalendarEventDialog(
 						[m(".flex-grow", renderInvitationField()), m(".flex-grow", renderAttendees())],
 					),
 				),
-				renderDateTimePickers(),
+				m(EventTimeEditor, {}),
 				m(".flex.items-center.mt-s", [
 					m(Checkbox, {
 						checked: viewModel.allDay,
@@ -717,7 +665,7 @@ function renderAddAttendeesField(text: Stream<string>, viewModel: CalendarEventV
 	])
 }
 
-function renderTwoColumnsIfFits(left: Children, right: Children): Children {
+export function renderTwoColumnsIfFits(left: Children, right: Children): Children {
 	if (client.isMobileDevice()) {
 		return m(".flex.col", [m(".flex", left), m(".flex", right)])
 	} else {

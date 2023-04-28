@@ -7,94 +7,92 @@ import {
 	EncryptedMailAddress,
 } from "../../api/entities/tutanota/TypeRefs.js"
 import m from "mithril"
-import { clone, findAllAndRemove, findAndRemove, incrementDate } from "@tutao/tutanota-utils"
-import {
-	cleanMailAddress,
-	findAttendeeInAddresses,
-	findRecipientWithAddress,
-	generateEventElementId,
-	isAllDayEvent,
-} from "../../api/common/utils/CommonCalendarUtils.js"
+import { assertNotNull, clone, findAllAndRemove, findAndRemove, incrementDate } from "@tutao/tutanota-utils"
+import { cleanMailAddress, findAttendeeInAddresses, findRecipientWithAddress, isAllDayEvent } from "../../api/common/utils/CommonCalendarUtils.js"
 import { AlarmInterval, CalendarAttendeeStatus, EndType, RepeatPeriod } from "../../api/common/TutanotaConstants.js"
 import { ContactNames, getContactDisplayName } from "../../contacts/model/ContactUtils.js"
 
 import { getEventWithDefaultTimes } from "./CalendarEventViewModel.js"
 import { Time } from "../../api/common/utils/Time.js"
 import { DateTime } from "luxon"
-import {
-	getDiffInDays,
-	getEventEnd,
-	getEventStart,
-	getStartOfDayWithZone,
-	getTimeZone,
-	incrementByRepeatPeriod,
-	prepareCalendarDescription,
-} from "./CalendarUtils.js"
+import { generateUid, getDiffInDays, getEventEnd, getEventStart, getStartOfDayWithZone, getTimeZone, incrementByRepeatPeriod } from "./CalendarUtils.js"
 import { TIMESTAMP_ZERO_YEAR } from "@tutao/tutanota-utils/dist/DateUtils.js"
-import { AlarmInfo, createAlarmInfo, createRepeatRule } from "../../api/entities/sys/TypeRefs.js"
-import { ProgrammingError } from "../../api/common/error/ProgrammingError.js"
+import { createRepeatRule } from "../../api/entities/sys/TypeRefs.js"
 import { htmlSanitizer } from "../../misc/HtmlSanitizer.js"
+import { removeTechnicalFields } from "../../api/common/utils/EntityUtils.js"
 
 export const enum EventType {
-	OWN = "own",
 	// event in our own calendar and we are organizer
-	SHARED_RO = "shared_ro",
+	OWN = "own",
 	// event in shared calendar with read permission
-	SHARED_RW = "shared_rw",
+	SHARED_RO = "shared_ro",
 	// event in shared calendar with write permission
-	INVITE = "invite", // invite from calendar invitation which is not stored in calendar yet, or event stored and we are not organizer
+	SHARED_RW = "shared_rw",
+	// invite from calendar invitation which is not stored in calendar yet, or event stored and we are not organizer
+	INVITE = "invite",
+}
+
+export type CalendarEventEditResult = {
+	event: CalendarEvent
+	alarms: ReadonlyArray<AlarmInterval>
+	calendar: Id
 }
 
 export class CalendarEventEditModel {
 	private readonly _result: CalendarEvent
 	private _isAllDay: boolean
 
+	// memoize sanitized versions of the free-form fields
+	private sanitizedSummary: string | null = null
+	private sanitizedLocation: string | null = null
+	private sanitizedDescription: string | null = null
+
 	/**
 	 * keeps track of all changes to a calendar events fields. Meant to maintain the invariants through multiple edit operations and to
-	 * provide getters that can be used to display the current state.
+	 * provide getters that can be used to display the current state. Does not do any server calls.
 	 *
-	 * the passed initialization event will be cloned and sanitized on construction.
+	 * the passed initialization event will be cloned and sanitized.
 	 *
 	 * get CalendarEventEditDialogViewModel.result for a finished event with the selected properties that can be updated/created on the server,
 	 * do not use the getters on individual fields for modifying something else.
 	 *
-	 * @param initialValues partial calendar event to prepopulate the editor / use as a starting point
-	 * @param calendars only the calendars the current user is allowed to write to, no others. MUST contain at least one item.
+	 * @param initialValues partial calendar event to prepopulate the editor / use as a starting point. will not be modified.
 	 * @param selectedCalendar the Id of the pre-selected calendar, since this is not explicitly tracked on the event
 	 * @param ownMailAddresses list of all mail addresses for this user. MUST contain at least one item.
 	 * @param eventType how did this event end up in our calendar? do not set this to "shared_ro" because
 	 * that's not editable. influences what parts can be changed and how.
-	 * @param _alarms the list of alarms associated with the event (already resolved)
+	 * @param _alarms the list of alarm triggers that should be initially set on the result.
 	 * @param uiUpdateCallback callback for redrawing the display if necessary
 	 * @param timeZone the time zone to consider local for updating the times.
 	 */
 	constructor(
 		initialValues: Partial<CalendarEvent>,
-		private readonly calendars: ReadonlyArray<Id>,
-		private selectedCalendar: Id,
+		public selectedCalendar: Id,
 		private readonly ownMailAddresses: ReadonlyArray<EncryptedMailAddress>,
 		private readonly eventType: EventType = EventType.OWN,
-		private _alarms: Array<AlarmInfo> = [],
+		private _alarms: Array<AlarmInterval> = [],
 		private readonly uiUpdateCallback: () => void = m.redraw,
 		private readonly timeZone: string = getTimeZone(),
 	) {
 		this._result = createCalendarEvent(clone(initialValues))
-		this.cleanupTimes()
-		// the description might be from an invite we never saw before
-		// FIXME: when are summary and other strings sanitized?
-		// FIXME: how to decide which content to block? existing event / invite
-		const initialDescription = prepareCalendarDescription(this._result.description)
-		this._result.description = htmlSanitizer.sanitizeHTML(initialDescription, { blockExternalContent: false }).html
+		this.cleanupInitialValues()
 		this._isAllDay = isAllDayEvent(this._result)
 	}
 
-	private cleanupTimes() {
+	private cleanupInitialValues() {
 		// zero out the second and millisecond part of start/end time. can't use the getters for startTime and endTime
 		// because they depend on all-day status.
 		const startTime = DateTime.fromJSDate(this._result.startTime, { zone: this.timeZone }).set({ second: 0, millisecond: 0 })
 		this._result.startTime = startTime.toJSDate()
 		const endTime = DateTime.fromJSDate(this._result.endTime, { zone: this.timeZone }).set({ second: 0, millisecond: 0 })
 		this._result.endTime = endTime.toJSDate()
+
+		// remove the alarm infos from the result, they don't contain any useful information for the editing operation.
+		// selected alarms are returned in the result separate from the event.
+		this._result.alarmInfos = []
+
+		// the event we got passed may already have some technical fields assigned, so we remove them.
+		removeTechnicalFields(this._result)
 	}
 
 	set isAllDay(value: boolean) {
@@ -270,37 +268,82 @@ export class CalendarEventEditModel {
 		}
 	}
 
+	/**
+	 * get the current interval this series repeats in.
+	 *
+	 * if the event is not set to
+	 */
 	get repeatInterval(): number {
-		return Number(this._result.repeatRule?.interval ?? "1")
+		if (!this._result.repeatRule?.interval) return 1
+		return Number(this._result.repeatRule?.interval)
 	}
 
+	/**
+	 * set the event to occur on every nth of its repeat period (ie every second, third, fourth day/month/year...).
+	 * setting it to something less than 1 will set the interval to 1
+	 * @param interval
+	 */
 	set repeatInterval(interval: number) {
+		if (interval < 1) interval = 1
 		const stringInterval = String(interval)
 		if (this._result.repeatRule && this._result.repeatRule?.interval !== stringInterval) {
 			this._result.repeatRule.interval = stringInterval
 		}
 	}
 
+	/**
+	 * get the current way for the event series to end.
+	 */
 	get repeatEndType(): EndType {
 		return (this._result.repeatRule?.endType ?? EndType.Never) as EndType
 	}
 
+	/**
+	 * set the way the event series will stop repeating. if this causes a change in the event,
+	 * the endValue will be set to the default for the selected EndType.
+	 *
+	 * @param endType
+	 */
 	set repeatEndType(endType: EndType) {
-		if (this._result.repeatRule && this._result.repeatRule.endType !== endType) {
-			this._result.repeatRule.endType = endType
+		if (!this._result.repeatRule) {
+			// event does not repeat, no changes necessary
+			return
+		}
 
-			if (endType === EndType.UntilDate) {
-				this._result.repeatRule.endValue = String(incrementByRepeatPeriod(new Date(), RepeatPeriod.MONTHLY, 1, this.timeZone).getTime())
-			} else {
-				this._result.repeatRule.endValue = "1"
-			}
+		if (this._result.repeatRule.endType === endType) {
+			// event series end is already set to the requested value
+			return
+		}
+
+		this._result.repeatRule.endType = endType
+
+		switch (endType) {
+			case EndType.UntilDate:
+				this._result.repeatRule.endValue = getDefaultEndDateEndValue(this._result, this.timeZone)
+				return
+			case EndType.Count:
+			case EndType.Never:
+				this._result.repeatRule.endValue = getDefaultEndCountValue()
 		}
 	}
 
+	/**
+	 * get the current maximum number of repeats. if the event is not set to repeat or
+	 * end after number of occurrences, returns the default max repeat number.
+	 */
 	get repeatEndOccurrences(): number {
-		return Number(this._result.repeatRule?.endValue ?? "1")
+		if (this._result.repeatRule?.endType === EndType.Count && this._result.repeatRule?.endValue) {
+			return Number(this._result.repeatRule?.endValue)
+		} else {
+			return Number(getDefaultEndCountValue())
+		}
 	}
 
+	/**
+	 * set the max number of repeats for the event series. if the event is not set to repeat or
+	 * not set to repeat a maximum number of times, this is a no-op.
+	 * @param endValue
+	 */
 	set repeatEndOccurrences(endValue: number) {
 		const stringEndValue = String(endValue)
 		if (this._result.repeatRule && this._result.repeatRule.endType === EndType.Count && this._result.repeatRule.endValue !== stringEndValue) {
@@ -308,49 +351,61 @@ export class CalendarEventEditModel {
 		}
 	}
 
+	/**
+	 * get the date after which the event series will stop repeating.
+	 *
+	 * returns the default value of a month after the start date if the event is not
+	 * set to stop repeating after a certain date.
+	 */
 	get repeatEndDate(): Date {
-		return this._result.repeatRule ? new Date(Number(this._result.repeatRule.endValue)) : new Date()
+		if (this._result.repeatRule?.endType === EndType.UntilDate) {
+			const endValue = this._result.repeatRule?.endValue
+			return new Date(Number(endValue))
+		} else {
+			return new Date(Number(getDefaultEndDateEndValue(this._result, this.timeZone)))
+		}
 	}
 
+	/**
+	 * set the date after which the event series ends. if the event does not repeat or the series is
+	 * not set to end after a date, this is a no-op.
+	 *
+	 * @param endDate
+	 */
 	set repeatEndDate(endDate: Date) {
-		const stringEndDate = String(endDate)
+		const stringEndDate = String(endDate.getTime())
 		if (this._result.repeatRule && this._result.repeatRule.endType === EndType.UntilDate && this._result.repeatRule.endValue !== stringEndDate) {
 			this._result.repeatRule.endValue = stringEndDate
 		}
 	}
 
-	set calendar(newCalendarId: Id) {
-		if (!this.calendars.find((id) => newCalendarId)) {
-			throw new ProgrammingError("Trying to set event to calendar that is not in the list of allowed calendars")
-		}
-
-		this.selectedCalendar = newCalendarId
-	}
-
-	get calendar(): Id {
-		return this.selectedCalendar
-	}
-
+	/**
+	 * idempotent: each event has at most one alarm of each alarm interval.
+	 * @param trigger the interval to add.
+	 */
 	addAlarm(trigger: AlarmInterval) {
-		if (this._alarms.some((a) => a.trigger === trigger)) return
-		const alarm = createAlarmInfo({
-			alarmIdentifier: generateEventElementId(Date.now()),
-			trigger,
-		})
-		this._alarms.push(alarm)
+		if (this._alarms.some((a) => a === trigger)) return
+		this._alarms.push(trigger)
 	}
 
+	/**
+	 * deactivate the alarm for the given interval.
+	 */
 	removeAlarm(trigger: AlarmInterval) {
-		// FIXME: may need to delete from server at some point if it already exists?
-		findAllAndRemove(this._alarms, (a) => a.trigger === trigger)
+		findAllAndRemove(this._alarms, (a) => a === trigger)
 	}
 
 	get alarms() {
 		return this._alarms
 	}
 
-	get result(): Readonly<CalendarEvent> {
-		// FIXME: we still need to adjust start/end depending on the all-day selection before returning this
+	/**
+	 * get the end result of the editing operation. will return:
+	 * * an event with an empty alarm infos array
+	 * * a deduplicated list of triggers for alarms
+	 * * the Id of the last calendar that was selected.
+	 */
+	get result(): Readonly<CalendarEventEditResult> {
 		// FIXME: also this.deleteExcludedDates() when actually saving if start time changed or repeat rule was changed
 		// FIXME: apply the correct list ID from the selected calendarInfo
 		// what's with already existing alarm infos? currently they seem to be recreated every time the event is changed, new IDs and everything
@@ -359,28 +414,70 @@ export class CalendarEventEditModel {
 			returnedResult.startTime = getStartOfDayWithZone(returnedResult.startTime, "utc")
 			returnedResult.endTime = incrementDate(getStartOfDayWithZone(returnedResult.endTime, "utc"), 1)
 		}
-		return returnedResult
+
+		if (returnedResult.attendees.length < 2) {
+			// we will never have a single attendee without also having another attendee that's the organizer
+			returnedResult.attendees.length = 0
+			returnedResult.organizer = null
+		}
+
+		// we want the sanitized versions of these
+		returnedResult.summary = this.summary
+		returnedResult.location = this.location
+		returnedResult.description = this.description
+		returnedResult.uid = returnedResult.uid ?? generateUid(assertNotNull(this.selectedCalendar).group._id, Date.now())
+
+		return {
+			event: returnedResult,
+			alarms: this._alarms.slice(),
+			calendar: this.selectedCalendar,
+		}
 	}
 
+	/**
+	 * get a sanitized version of the last description set on the event.
+	 */
 	get description(): string {
-		return this._result.description
+		if (this.sanitizedDescription == null) {
+			this.sanitizedDescription = sanitizeEventField(this._result.description)
+		}
+		return this.sanitizedDescription
 	}
 
 	set description(v: string) {
-		// sanitization?
+		this.sanitizedDescription = null
 		this._result.description = v
 	}
 
 	get location(): string {
-		return this._result.location
+		if (this.sanitizedLocation == null) {
+			this.sanitizedLocation = sanitizeEventField(this._result.location)
+		}
+		return this.sanitizedLocation
 	}
 
 	set location(v: string) {
+		this.sanitizedLocation = null
 		this._result.location = v
+		this.uiUpdateCallback()
 	}
 
+	/**
+	 * get a sanitized version of the last summary that was set on the event.
+	 */
+	get summary(): string {
+		if (this.sanitizedSummary == null) {
+			this.sanitizedSummary = sanitizeEventField(this._result.summary)
+		}
+		return this.sanitizedSummary
+	}
+
+	/**
+	 * change the summary of the event.
+	 * @param v
+	 */
 	set summary(v: string) {
-		// sanitization?
+		this.sanitizedSummary = null
 		this._result.summary = v
 		this.uiUpdateCallback()
 	}
@@ -398,6 +495,10 @@ export class CalendarEventEditModel {
 			// if the only attendee has one of our mail addresses, there is no one else we have to worry about
 			!(this._result.attendees.length === 1 && findRecipientWithAddress(this.ownMailAddresses, this._result.attendees[0].address.address) != null)
 		)
+	}
+
+	get attendees(): ReadonlyArray<CalendarEventAttendee> {
+		return this._result.attendees
 	}
 
 	/**
@@ -465,7 +566,8 @@ export class CalendarEventEditModel {
 	 * remove a single attendee from the list.
 	 * * if it's the organizer AND there are other attendees, this is a no-op
 	 * * if it's the organizer AND there are no other attendees, this empties the attendee list and sets the organizer to null
-	 * * if it's not the organizer, but the last non-organizer attendee, also removes the organizer from the attendee list and sets the organizer to null.
+	 * * if it's not the organizer, but the last non-organizer attendee, only removes the attendee from the list, but the
+	 *   result will have an empty attendee list and no organizer if no other attendees are added in the meantime.
 	 * * if it's not the organizer but not the last non-organizer attendee, just removes that attendee from the list.
 	 * @param address the attendee to remove.
 	 */
@@ -481,11 +583,6 @@ export class CalendarEventEditModel {
 			}
 		} else {
 			findAndRemove(this._result.attendees, (a) => cleanMailAddress(a.address.address) === cleanGuestAddress)
-		}
-
-		if (this._result.attendees.length < 2) {
-			this.organizer = null
-			this._result.attendees.length = 0
 		}
 	}
 
@@ -567,4 +664,24 @@ export class CalendarEventEditModel {
 		if (!this._result.repeatRule) return
 		this._result.repeatRule.excludedDates.length = 0
 	}
+}
+
+/**
+ * create the default repeat end for an event series that ends on a date
+ */
+export function getDefaultEndDateEndValue(event: CalendarEvent, timeZone: string): string {
+	// one month after the event's start time in the local time zone.
+	return String(incrementByRepeatPeriod(event.startTime, RepeatPeriod.MONTHLY, 1, timeZone).getTime())
+}
+
+/**
+ * get the default repeat end for an event series that ends after number of repeats
+ */
+export function getDefaultEndCountValue(): string {
+	return "10"
+}
+
+function sanitizeEventField(value: string): string {
+	// FIXME: how to decide which content to block? existing event / invite
+	return htmlSanitizer.sanitizeHTML(value, { blockExternalContent: false }).html
 }
