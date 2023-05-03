@@ -35,7 +35,7 @@ export class EventBanner implements Component<Attrs> {
 					paddingLeft: px(size.hpad_large),
 					paddingRight: px(size.hpad_large),
 					overflow: "hidden",
-					paddingTop: "0",
+					paddingTop: px(size.vpad),
 				},
 			},
 			[
@@ -44,7 +44,7 @@ export class EventBanner implements Component<Attrs> {
 					method === CalendarMethod.REQUEST && ownAttendee
 						? isRepliedTo(mail) || (ownAttendee && ownAttendee.status !== CalendarAttendeeStatus.NEEDS_ACTION)
 							? m(".pt.align-self-start.start.smaller", lang.get("alreadyReplied_msg"))
-							: renderReplyButtons(event, mail, recipient)
+							: renderReplyButtons((status: CalendarAttendeeStatus) => sendResponse(event, recipient, status, mail))
 						: method === CalendarMethod.REPLY
 						? m(".pt.align-self-start.start.smaller", lang.get("eventNotificationUpdated_msg"))
 						: null,
@@ -92,30 +92,28 @@ export class BannerButton implements Component<BannerButtonAttrs> {
 	}
 }
 
-function renderReplyButtons(event: CalendarEvent, previousMail: Mail, recipient: string) {
-	return [
-		m(".pt", lang.get("invitedToEvent_msg")),
+export function renderReplyButtons(updateStatus: (status: CalendarAttendeeStatus) => void, currentStatus?: CalendarAttendeeStatus) {
+	const colors = {
+		borderColor: theme.content_button,
+		color: theme.content_fg,
+	}
+
+	const highlightColors = {
+		borderColor: theme.content_accent,
+		color: theme.content_accent,
+	}
+
+	const makeStatusButtonAttrs = (status: CalendarAttendeeStatus, text: TranslationKey): BannerButtonAttrs =>
+		Object.assign({ text, click: () => updateStatus(status) }, currentStatus === status ? highlightColors : colors)
+
+	return m(".flex.col", [
+		lang.get("invitedToEvent_msg"),
 		m(".flex.items-center.mt", [
-			m(BannerButton, {
-				text: "yes_label",
-				click: () => sendResponse(event, recipient, CalendarAttendeeStatus.ACCEPTED, previousMail),
-				borderColor: theme.content_button,
-				color: theme.content_fg,
-			}),
-			m(BannerButton, {
-				text: "maybe_label",
-				click: () => sendResponse(event, recipient, CalendarAttendeeStatus.TENTATIVE, previousMail),
-				borderColor: theme.content_button,
-				color: theme.content_fg,
-			}),
-			m(BannerButton, {
-				text: "no_label",
-				click: () => sendResponse(event, recipient, CalendarAttendeeStatus.DECLINED, previousMail),
-				borderColor: theme.content_button,
-				color: theme.content_fg,
-			}),
+			m(BannerButton, makeStatusButtonAttrs(CalendarAttendeeStatus.ACCEPTED, "yes_label")),
+			m(BannerButton, makeStatusButtonAttrs(CalendarAttendeeStatus.TENTATIVE, "maybe_label")),
+			m(BannerButton, makeStatusButtonAttrs(CalendarAttendeeStatus.DECLINED, "no_label")),
 		]),
-	]
+	])
 }
 
 function sendResponse(event: CalendarEvent, recipient: string, status: CalendarAttendeeStatus, previousMail: Mail) {

@@ -3,6 +3,8 @@ import type { CalendarEvent } from "../../entities/tutanota/TypeRefs.js"
 import { EncryptedMailAddress } from "../../entities/tutanota/TypeRefs.js"
 import { stringToCustomId } from "./EntityUtils"
 
+export type CalendarEventTimes = Pick<CalendarEvent, "startTime" | "endTime">
+
 /**
  * the time in ms that element ids for calendar events and alarms  get randomized by
  */
@@ -11,7 +13,7 @@ export const DAYS_SHIFTED_MS = 15 * DAY_IN_MILLIS
 /*
  * convenience wrapper for isAllDayEventByTimes
  */
-export function isAllDayEvent({ startTime, endTime }: CalendarEvent): boolean {
+export function isAllDayEvent({ startTime, endTime }: CalendarEventTimes): boolean {
 	return isAllDayEventByTimes(startTime, endTime)
 }
 

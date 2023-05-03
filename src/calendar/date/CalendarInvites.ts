@@ -11,6 +11,9 @@ import { NoopProgressMonitor } from "../../api/common/utils/ProgressMonitor"
 import { CalendarEventViewModel } from "./CalendarEventViewModel"
 import { DataFile } from "../../api/common/DataFile"
 import { findAttendeeInAddresses } from "../../api/common/utils/CommonCalendarUtils.js"
+import { RecipientType } from "../../api/common/recipients/Recipient.js"
+
+export type Guest = Pick<CalendarEventAttendee, "address" | "status"> & { type: RecipientType }
 
 function getParsedEvent(fileData: DataFile):
 	| {
@@ -80,29 +83,22 @@ export async function getEventFromFile(file: TutanotaFile): Promise<CalendarEven
 }
 
 /**
- * Returns the latest version for the given event by uid. If the event is not in any calendar (because it has not been stored yet, e.g. in case of invite)
+ * Returns the latest version for the given event by uid. If the event is not in
+ * any calendar (because it has not been stored yet, e.g. in case of invite)
  * the given event is returned.
  */
-export function getLatestEvent(event: CalendarEvent): Promise<CalendarEvent> {
+export async function getLatestEvent(event: CalendarEvent): Promise<CalendarEvent> {
 	const uid = event.uid
-
-	if (uid) {
-		return locator.calendarFacade.getEventByUid(uid).then((existingEvent) => {
-			if (existingEvent) {
-				// If the file we are opening is newer than the one which we have on the server, update server version.
-				// Should not happen normally but can happen when e.g. reply and update were sent one after another before we accepted
-				// the invite. Then accepting first invite and then opening update should give us updated version.
-				if (filterInt(existingEvent.sequence) < filterInt(event.sequence)) {
-					return locator.calendarModel.updateEventWithExternal(existingEvent, event)
-				} else {
-					return existingEvent
-				}
-			} else {
-				return event
-			}
-		})
+	if (uid == null) return event
+	const existingEvent = await locator.calendarFacade.getEventByUid(uid)
+	if (existingEvent == null) return event
+	// If the file we are opening is newer than the one which we have on the server, update server version.
+	// Should not happen normally but can happen when e.g. reply and update were sent one after another before we accepted
+	// the invite. Then accepting first invite and then opening update should give us updated version.
+	if (filterInt(existingEvent.sequence) < filterInt(event.sequence)) {
+		return await locator.calendarModel.updateEventWithExternal(existingEvent, event)
 	} else {
-		return Promise.resolve(event)
+		return existingEvent
 	}
 }
 

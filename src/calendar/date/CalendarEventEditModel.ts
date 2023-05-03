@@ -7,8 +7,14 @@ import {
 	EncryptedMailAddress,
 } from "../../api/entities/tutanota/TypeRefs.js"
 import m from "mithril"
-import { assertNotNull, clone, findAllAndRemove, findAndRemove, incrementDate } from "@tutao/tutanota-utils"
-import { cleanMailAddress, findAttendeeInAddresses, findRecipientWithAddress, isAllDayEvent } from "../../api/common/utils/CommonCalendarUtils.js"
+import { clone, findAllAndRemove, findAndRemove, incrementDate } from "@tutao/tutanota-utils"
+import {
+	CalendarEventTimes,
+	cleanMailAddress,
+	findAttendeeInAddresses,
+	findRecipientWithAddress,
+	isAllDayEvent,
+} from "../../api/common/utils/CommonCalendarUtils.js"
 import { AlarmInterval, CalendarAttendeeStatus, EndType, RepeatPeriod } from "../../api/common/TutanotaConstants.js"
 import { ContactNames, getContactDisplayName } from "../../contacts/model/ContactUtils.js"
 
@@ -19,7 +25,7 @@ import { generateUid, getDiffInDays, getEventEnd, getEventStart, getStartOfDayWi
 import { TIMESTAMP_ZERO_YEAR } from "@tutao/tutanota-utils/dist/DateUtils.js"
 import { createRepeatRule } from "../../api/entities/sys/TypeRefs.js"
 import { htmlSanitizer } from "../../misc/HtmlSanitizer.js"
-import { removeTechnicalFields } from "../../api/common/utils/EntityUtils.js"
+import { getStrippedClone, Stripped } from "../../api/common/utils/EntityUtils.js"
 
 export const enum EventType {
 	// event in our own calendar and we are organizer
@@ -33,7 +39,7 @@ export const enum EventType {
 }
 
 export type CalendarEventEditResult = {
-	event: CalendarEvent
+	event: Stripped<CalendarEvent>
 	alarms: ReadonlyArray<AlarmInterval>
 	calendar: Id
 }
@@ -74,25 +80,8 @@ export class CalendarEventEditModel {
 		private readonly uiUpdateCallback: () => void = m.redraw,
 		private readonly timeZone: string = getTimeZone(),
 	) {
-		this._result = createCalendarEvent(clone(initialValues))
-		this.cleanupInitialValues()
+		this._result = cleanupInitialValuesForEditing(initialValues, this.timeZone)
 		this._isAllDay = isAllDayEvent(this._result)
-	}
-
-	private cleanupInitialValues() {
-		// zero out the second and millisecond part of start/end time. can't use the getters for startTime and endTime
-		// because they depend on all-day status.
-		const startTime = DateTime.fromJSDate(this._result.startTime, { zone: this.timeZone }).set({ second: 0, millisecond: 0 })
-		this._result.startTime = startTime.toJSDate()
-		const endTime = DateTime.fromJSDate(this._result.endTime, { zone: this.timeZone }).set({ second: 0, millisecond: 0 })
-		this._result.endTime = endTime.toJSDate()
-
-		// remove the alarm infos from the result, they don't contain any useful information for the editing operation.
-		// selected alarms are returned in the result separate from the event.
-		this._result.alarmInfos = []
-
-		// the event we got passed may already have some technical fields assigned, so we remove them.
-		removeTechnicalFields(this._result)
 	}
 
 	set isAllDay(value: boolean) {
@@ -151,7 +140,7 @@ export class CalendarEventEditModel {
 
 	/**
 	 * the current end time (hour:minutes) of the event in the local time zone.
-	 * will return 00:00 for all-day events independently from the time zone.
+	 * will return 00:00 for all-day events independently of the time zone.
 	 */
 	get endTime(): Time {
 		if (this._isAllDay) {
@@ -400,15 +389,17 @@ export class CalendarEventEditModel {
 	}
 
 	/**
-	 * get the end result of the editing operation. will return:
-	 * * an event with an empty alarm infos array
-	 * * a deduplicated list of triggers for alarms
-	 * * the Id of the last calendar that was selected.
+	 * get the end result of the editing operation. will return an object containing:
+	 * * a partial calendar event with an empty alarm infos array that can be used to update or create a calendar event on the server.
+	 * * a deduplicated list of triggers for alarms. CalendarEvents contain references
+	 *   to AlarmInfos, and we don't do server calls so the consumer of the result has to set these
+	 *   up correctly.
+	 * * the Id of the last calendar that was selected. This is implicitly encoded in the
+	 *   calendar event's Id and must be set up by the consumer of the result.
+	 * * lists of attendees to send  invite, update and cancel messages to.
 	 */
 	get result(): Readonly<CalendarEventEditResult> {
 		// FIXME: also this.deleteExcludedDates() when actually saving if start time changed or repeat rule was changed
-		// FIXME: apply the correct list ID from the selected calendarInfo
-		// what's with already existing alarm infos? currently they seem to be recreated every time the event is changed, new IDs and everything
 		const returnedResult = clone(this._result)
 		if (this._isAllDay) {
 			returnedResult.startTime = getStartOfDayWithZone(returnedResult.startTime, "utc")
@@ -425,7 +416,9 @@ export class CalendarEventEditModel {
 		returnedResult.summary = this.summary
 		returnedResult.location = this.location
 		returnedResult.description = this.description
-		returnedResult.uid = returnedResult.uid ?? generateUid(assertNotNull(this.selectedCalendar).group._id, Date.now())
+
+		// FIXME: do we want to do this here? it's not really relevant to the *contents* of the event.
+		returnedResult.uid = returnedResult.uid ?? generateUid(this.selectedCalendar, Date.now())
 
 		return {
 			event: returnedResult,
@@ -497,8 +490,35 @@ export class CalendarEventEditModel {
 		)
 	}
 
+	/**
+	 * get our own attendee, if any
+	 */
+	get ownAttendee(): CalendarEventAttendee | null {
+		return findAttendeeInAddresses(
+			this._result.attendees,
+			this.ownMailAddresses.map((a) => a.address),
+		)
+	}
+
+	/**
+	 * get the current organizer of the event
+	 */
+	get organizer(): CalendarEventAttendee | null {
+		return this._result.organizer && findAttendeeInAddresses(this._result.attendees, [this._result.organizer.address])
+	}
+
+	private set organizer(newOrganizer: CalendarEventAttendee | null) {
+		if (!this.canModifyOrganizer()) return
+		this._result.organizer = newOrganizer?.address ?? null
+	}
+
+	/**
+	 * a list of all the attendees of the event that are not ourselves or the organizer.
+	 */
 	get attendees(): ReadonlyArray<CalendarEventAttendee> {
-		return this._result.attendees
+		const organizer = this.organizer
+		const ownAttendee = this.ownAttendee
+		return this._result.attendees.filter((a) => a !== organizer && a !== ownAttendee)
 	}
 
 	/**
@@ -534,17 +554,18 @@ export class CalendarEventEditModel {
 	 * @private
 	 */
 	private addOwnAttendee(address: EncryptedMailAddress): void {
-		const existingOwnAttendee = this.findOwnAttendee()
+		const existingOwnAttendee = this.ownAttendee
 		// If we existed as an attendee then remove the existing ownAttendee
 		// and the new one will be added in the next step
 		if (existingOwnAttendee != null) {
 			const cleanOwnAttendeeAdress = cleanMailAddress(existingOwnAttendee.address.address)
 			findAndRemove(this._result.attendees, (a) => cleanOwnAttendeeAdress === cleanMailAddress(a.address.address))
 		}
-		this._result.attendees.push(createCalendarEventAttendee({ address, status: CalendarAttendeeStatus.ACCEPTED }))
+		const attendeeToAdd = createCalendarEventAttendee({ address, status: CalendarAttendeeStatus.ACCEPTED })
+		this._result.attendees.push(attendeeToAdd)
 
 		// make sure that the organizer on the event is the same address as we added as an own attendee.
-		this.organizer = address
+		this.organizer = attendeeToAdd
 	}
 
 	/**
@@ -553,7 +574,7 @@ export class CalendarEventEditModel {
 	 * @private
 	 */
 	private addOtherAttendee(address: EncryptedMailAddress) {
-		if (!this.findOwnAttendee()) {
+		if (this.ownAttendee != null) {
 			// we're adding someone that's not us while we're not an attendee, so we add ourselves as an attendee and as organizer.
 			this.addOwnAttendee(this.ownMailAddresses[0])
 		}
@@ -592,7 +613,7 @@ export class CalendarEventEditModel {
 	 */
 	setOwnAttendance(status: CalendarAttendeeStatus) {
 		if (!this.canModifyOwnAttendance()) return
-		const ownAttendee = this.findOwnAttendee()
+		const ownAttendee = this.ownAttendee
 		if (!ownAttendee) {
 			console.log("tried to modify own attendance while not being an attendee")
 			return
@@ -601,26 +622,14 @@ export class CalendarEventEditModel {
 		ownAttendee.status = status
 	}
 
-	findOwnAttendee(): CalendarEventAttendee | null {
-		return findAttendeeInAddresses(
-			this._result.attendees,
-			this.ownMailAddresses.map((a) => a.address),
-		)
-	}
-
 	private canModifyOwnAttendance(): boolean {
 		// We can always modify own attendance in own event. Also can modify if it's invite in our calendar and we are invited.
-		return this.eventType === EventType.OWN || (this.eventType === EventType.INVITE && !!this.findOwnAttendee())
+		return this.eventType === EventType.OWN || (this.eventType === EventType.INVITE && !!this.ownAttendee)
 	}
 
 	private canModifyOrganizer(): boolean {
 		// We can only modify the organizer if it is our own event and there are no guests besides us
 		return this.eventType === EventType.OWN && !this.hasOtherAttendees()
-	}
-
-	private set organizer(newOrganizer: EncryptedMailAddress | null) {
-		if (!this.canModifyOrganizer()) return
-		this._result.organizer = newOrganizer
 	}
 
 	/**
@@ -669,9 +678,9 @@ export class CalendarEventEditModel {
 /**
  * create the default repeat end for an event series that ends on a date
  */
-export function getDefaultEndDateEndValue(event: CalendarEvent, timeZone: string): string {
+export function getDefaultEndDateEndValue({ startTime }: CalendarEventTimes, timeZone: string): string {
 	// one month after the event's start time in the local time zone.
-	return String(incrementByRepeatPeriod(event.startTime, RepeatPeriod.MONTHLY, 1, timeZone).getTime())
+	return String(incrementByRepeatPeriod(startTime, RepeatPeriod.MONTHLY, 1, timeZone).getTime())
 }
 
 /**
@@ -684,4 +693,22 @@ export function getDefaultEndCountValue(): string {
 function sanitizeEventField(value: string): string {
 	// FIXME: how to decide which content to block? existing event / invite
 	return htmlSanitizer.sanitizeHTML(value, { blockExternalContent: false }).html
+}
+
+function cleanupInitialValuesForEditing(initialValues: Partial<CalendarEvent>, zone: string): CalendarEvent {
+	// the event we got passed may already have some technical fields assigned, so we remove them.
+	const stripped = getStrippedClone<CalendarEvent>(initialValues)
+	const result = createCalendarEvent(stripped)
+	// zero out the second and millisecond part of start/end time. can't use the getters for startTime and endTime
+	// because they depend on all-day status.
+	const startTime = DateTime.fromJSDate(result.startTime, { zone }).set({ second: 0, millisecond: 0 })
+	result.startTime = startTime.toJSDate()
+	const endTime = DateTime.fromJSDate(result.endTime, { zone }).set({ second: 0, millisecond: 0 })
+	result.endTime = endTime.toJSDate()
+
+	// remove the alarm infos from the result, they don't contain any useful information for the editing operation.
+	// selected alarms are returned in the edit result separate from the event.
+	result.alarmInfos = []
+
+	return result
 }

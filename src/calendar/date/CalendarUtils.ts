@@ -11,7 +11,9 @@ import {
 	isSameDay,
 	isSameDayOfDate,
 	isValidDate,
+	lazyMemoized,
 	neverNull,
+	numberRange,
 } from "@tutao/tutanota-utils"
 import {
 	AlarmInterval,
@@ -21,11 +23,12 @@ import {
 	EventTextTimeOption,
 	getWeekStart,
 	RepeatPeriod,
+	TimeFormat,
 	WeekStart,
 } from "../../api/common/TutanotaConstants"
 import { DateTime, FixedOffsetZone, IANAZone } from "luxon"
 import { CalendarEvent, CalendarGroupRoot, CalendarRepeatRule, createCalendarRepeatRule, UserSettingsGroupRoot } from "../../api/entities/tutanota/TypeRefs.js"
-import { DAYS_SHIFTED_MS, generateEventElementId, isAllDayEvent, isAllDayEventByTimes } from "../../api/common/utils/CommonCalendarUtils"
+import { CalendarEventTimes, DAYS_SHIFTED_MS, generateEventElementId, isAllDayEvent, isAllDayEventByTimes } from "../../api/common/utils/CommonCalendarUtils"
 import { lang } from "../../misc/LanguageViewModel"
 import { formatDateTime, formatDateWithMonth, formatTime, timeStringFromParts } from "../../misc/Formatter"
 import { size } from "../../gui/size"
@@ -41,6 +44,8 @@ import { assertMainOrNode } from "../../api/common/Env"
 import { ChildArray, Children } from "mithril"
 import { DateProvider } from "../../api/common/DateProvider"
 import { TIMESTAMP_ZERO_YEAR } from "@tutao/tutanota-utils/dist/DateUtils"
+import { AllIcons } from "../../gui/base/Icon.js"
+import { Icons } from "../../gui/base/icons/Icons.js"
 
 assertMainOrNode()
 export const CALENDAR_EVENT_HEIGHT: number = size.calendar_line_height + 2
@@ -562,12 +567,17 @@ export function getStartOfTheWeekOffsetForUser(userSettingsGroupRoot: UserSettin
 	return getStartOfTheWeekOffset(getWeekStart(userSettingsGroupRoot))
 }
 
+export function getTimeFormatForUser(userSettingsGroupRoot: UserSettingsGroupRoot): TimeFormat {
+	// it's saved as a string, but is a const enum.
+	return userSettingsGroupRoot.timeFormat as TimeFormat
+}
+
 export function getWeekNumber(startOfTheWeek: Date): number {
 	// Currently it doesn't support US-based week numbering system with partial weeks.
 	return DateTime.fromJSDate(startOfTheWeek).weekNumber
 }
 
-export function getEventEnd(event: CalendarEvent, timeZone: string): Date {
+export function getEventEnd(event: CalendarEventTimes, timeZone: string): Date {
 	if (isAllDayEvent(event)) {
 		return getAllDayDateForTimezone(event.endTime, timeZone)
 	} else {
@@ -575,8 +585,8 @@ export function getEventEnd(event: CalendarEvent, timeZone: string): Date {
 	}
 }
 
-export function getEventStart(event: CalendarEvent, timeZone: string): Date {
-	return getEventStartByTimes(event.startTime, event.endTime, timeZone)
+export function getEventStart({ startTime, endTime }: CalendarEventTimes, timeZone: string): Date {
+	return getEventStartByTimes(startTime, endTime, timeZone)
 }
 
 export function getAllDayDateUTCFromZone(date: Date, timeZone: string): Date {
@@ -1062,7 +1072,7 @@ export function getCalendarMonth(date: Date, firstDayOfWeekFromOffset: number, w
 	}
 }
 
-export function formatEventDuration(event: CalendarEvent, zone: string, includeTimezone: boolean): string {
+export function formatEventDuration(event: CalendarEventTimes, zone: string, includeTimezone: boolean): string {
 	if (isAllDayEvent(event)) {
 		const startTime = getEventStart(event, zone)
 		const startString = formatDateWithMonth(startTime)
@@ -1106,6 +1116,14 @@ export function calendarAttendeeStatusSymbol(status: CalendarAttendeeStatus): st
 			throw new Error("Unknown calendar attendee status: " + status)
 	}
 }
+
+export const iconForAttendeeStatus: Record<CalendarAttendeeStatus, AllIcons> = Object.freeze({
+	[CalendarAttendeeStatus.ACCEPTED]: Icons.CircleCheckmark,
+	[CalendarAttendeeStatus.TENTATIVE]: Icons.CircleHelp,
+	[CalendarAttendeeStatus.DECLINED]: Icons.CircleReject,
+	[CalendarAttendeeStatus.NEEDS_ACTION]: Icons.CircleEmpty,
+	[CalendarAttendeeStatus.ADDED]: Icons.CircleEmpty,
+})
 
 export function incrementSequence(sequence: string, isOwnEvent: boolean): string {
 	const current = filterInt(sequence) || 0
@@ -1206,7 +1224,7 @@ export function isEventBetweenDays(event: CalendarEvent, firstDay: Date, lastDay
 	return !(eventEndsBefore(firstDay, zone, event) || eventStartsAfter(getEndOfDay(lastDay), zone, event))
 }
 
-export function createRepeatRuleFrequencyValues(): SelectorItemList<RepeatPeriod | null> {
+export const createRepeatRuleFrequencyValues = lazyMemoized((): SelectorItemList<RepeatPeriod | null> => {
 	return [
 		{
 			name: lang.get("calendarRepeatIntervalNoRepeat_label"),
@@ -1229,9 +1247,9 @@ export function createRepeatRuleFrequencyValues(): SelectorItemList<RepeatPeriod
 			value: RepeatPeriod.ANNUALLY,
 		},
 	]
-}
+})
 
-export function createRepeatRuleEndTypeValues(): SelectorItemList<EndType> {
+export const createRepeatRuleEndTypeValues = lazyMemoized((): SelectorItemList<EndType> => {
 	return [
 		{
 			name: lang.get("calendarRepeatStopConditionNever_label"),
@@ -1246,7 +1264,72 @@ export function createRepeatRuleEndTypeValues(): SelectorItemList<EndType> {
 			value: EndType.UntilDate,
 		},
 	]
-}
+})
+
+export const createIntervalValues = lazyMemoized((): SelectorItemList<number> => numberRange(1, 256).map((n) => ({ name: String(n), value: n })))
+
+export const createAlarmIntervalItems = lazyMemoized(
+	(): SelectorItemList<AlarmInterval | null> => [
+		{
+			name: lang.get("comboBoxSelectionNone_msg"),
+			value: null,
+		},
+		{
+			name: lang.get("calendarReminderIntervalFiveMinutes_label"),
+			value: AlarmInterval.FIVE_MINUTES,
+		},
+		{
+			name: lang.get("calendarReminderIntervalTenMinutes_label"),
+			value: AlarmInterval.TEN_MINUTES,
+		},
+		{
+			name: lang.get("calendarReminderIntervalThirtyMinutes_label"),
+			value: AlarmInterval.THIRTY_MINUTES,
+		},
+		{
+			name: lang.get("calendarReminderIntervalOneHour_label"),
+			value: AlarmInterval.ONE_HOUR,
+		},
+		{
+			name: lang.get("calendarReminderIntervalOneDay_label"),
+			value: AlarmInterval.ONE_DAY,
+		},
+		{
+			name: lang.get("calendarReminderIntervalTwoDays_label"),
+			value: AlarmInterval.TWO_DAYS,
+		},
+		{
+			name: lang.get("calendarReminderIntervalThreeDays_label"),
+			value: AlarmInterval.THREE_DAYS,
+		},
+		{
+			name: lang.get("calendarReminderIntervalOneWeek_label"),
+			value: AlarmInterval.ONE_WEEK,
+		},
+	],
+)
+
+export const createAttendingItems = lazyMemoized(
+	(): SelectorItemList<CalendarAttendeeStatus> => [
+		{
+			name: lang.get("yes_label"),
+			value: CalendarAttendeeStatus.ACCEPTED,
+		},
+		{
+			name: lang.get("maybe_label"),
+			value: CalendarAttendeeStatus.TENTATIVE,
+		},
+		{
+			name: lang.get("no_label"),
+			value: CalendarAttendeeStatus.DECLINED,
+		},
+		{
+			name: lang.get("pending_label"),
+			value: CalendarAttendeeStatus.NEEDS_ACTION,
+			selectable: false,
+		},
+	],
+)
 
 export function getFirstDayOfMonth(d: Date): Date {
 	const date = new Date(d)

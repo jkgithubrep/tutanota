@@ -23,9 +23,6 @@ export class CalendarEventPopup implements ModalComponent {
 	private readonly _shortcuts: Shortcut[] = []
 	private readonly sanitizedDescription: string
 
-	private readonly isPersistentEvent: boolean
-	private readonly isExternal: boolean
-
 	constructor(
 		private readonly calendarEvent: CalendarEvent,
 		private readonly eventBubbleRect: PosRect,
@@ -42,34 +39,31 @@ export class CalendarEventPopup implements ModalComponent {
 					blockExternalContent: true,
 			  }).html
 			: ""
-		this.isPersistentEvent = !!calendarEvent._ownerGroup
-		this.isExternal = !this.viewModel
 		this._shortcuts.push({
 			key: Keys.ESC,
 			exec: () => this.close(),
 			help: "close_alt",
 		})
 
-		if (!this.isExternal) {
-			this._shortcuts.push({
-				key: Keys.E,
-				exec: () => {
-					this.onEditEvent()
+		if (this.canEditEvent()) {
+			this._shortcuts.push(
+				{
+					key: Keys.E,
+					exec: () => {
+						this.onEditEvent()
 
-					this.close()
+						this.close()
+					},
+					help: "edit_action",
 				},
-				help: "edit_action",
-			})
-		}
-
-		if (this.isDeleteAvailable()) {
-			this._shortcuts.push({
-				key: Keys.DELETE,
-				exec: () => {
-					this.deleteEvent()
+				{
+					key: Keys.DELETE,
+					exec: () => {
+						this.deleteEvent()
+					},
+					help: "delete_action",
 				},
-				help: "delete_action",
-			})
+			)
 		}
 
 		if (!!this.viewModel && this.viewModel.isForceUpdateAvailable()) {
@@ -106,42 +100,14 @@ export class CalendarEventPopup implements ModalComponent {
 				},
 			},
 			[
-				m(".flex.flex-end", [
-					!!this.viewModel && this.viewModel.isForceUpdateAvailable()
-						? m(Button, {
-								label: "sendUpdates_label",
-								click: () => this.forceSendingUpdatesToAttendees(),
-								type: ButtonType.ActionLarge,
-								icon: () => BootIcons.Mail,
-								colors: ButtonColor.DrawerNav,
-						  })
-						: null,
-					!this.isExternal
-						? m(Button, {
-								label: "edit_action",
-								click: () => {
-									this.onEditEvent()
-
-									this.close()
-								},
-								type: ButtonType.ActionLarge,
-								icon: () => Icons.Edit,
-								colors: ButtonColor.DrawerNav,
-						  })
-						: null,
-					this.renderDeleteButton(),
-					m(Button, {
-						label: "close_alt",
-						click: () => this.close(),
-						type: ButtonType.ActionLarge,
-						icon: () => Icons.Cancel,
-						colors: ButtonColor.DrawerNav,
-					}),
-				]),
+				m(".flex.flex-end", [this.renderSendUpdateButton(), this.renderEditButton(), this.renderDeleteButton(), this.renderCloseButton()]),
 				m(".flex-grow.scroll.visible-scrollbar", [
 					m(EventPreviewView, {
 						event: this.calendarEvent,
 						sanitizedDescription: this.sanitizedDescription,
+						setParticipation: (status) => {
+							console.log("what?", status)
+						},
 					}),
 				]),
 			],
@@ -158,7 +124,7 @@ export class CalendarEventPopup implements ModalComponent {
 	}
 
 	private renderDeleteButton(): Children {
-		if (!this.isDeleteAvailable()) return null
+		if (!this.canEditEvent()) return null
 
 		return m(
 			IconButton,
@@ -191,6 +157,42 @@ export class CalendarEventPopup implements ModalComponent {
 		)
 	}
 
+	private renderSendUpdateButton(): Children {
+		return !!this.viewModel && this.viewModel.isForceUpdateAvailable()
+			? m(Button, {
+					label: "sendUpdates_label",
+					click: () => this.forceSendingUpdatesToAttendees(),
+					type: ButtonType.ActionLarge,
+					icon: () => BootIcons.Mail,
+					colors: ButtonColor.DrawerNav,
+			  })
+			: null
+	}
+
+	private renderEditButton(): Children {
+		if (!this.canEditEvent()) return null
+		return m(Button, {
+			label: "edit_action",
+			click: () => {
+				this.onEditEvent()
+				this.close()
+			},
+			type: ButtonType.ActionLarge,
+			icon: () => Icons.Edit,
+			colors: ButtonColor.DrawerNav,
+		})
+	}
+
+	private renderCloseButton(): Children {
+		return m(Button, {
+			label: "close_alt",
+			click: () => this.close(),
+			type: ButtonType.ActionLarge,
+			icon: () => Icons.Cancel,
+			colors: ButtonColor.DrawerNav,
+		})
+	}
+
 	backgroundClick(e: MouseEvent): void {
 		modal.remove(this)
 	}
@@ -212,8 +214,8 @@ export class CalendarEventPopup implements ModalComponent {
 		return false
 	}
 
-	private isDeleteAvailable(): boolean {
-		return this.isPersistentEvent && !!this.viewModel && !this.viewModel.isReadOnlyEvent()
+	private canEditEvent(): boolean {
+		return !!this.calendarEvent._ownerGroup && !!this.viewModel && !this.viewModel.isReadOnlyEvent()
 	}
 
 	private async forceSendingUpdatesToAttendees(): Promise<void> {

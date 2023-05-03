@@ -72,8 +72,9 @@ import type { MailAddressNameChanger, MailAddressTableModel } from "../../settin
 import type { AnotherUserMailAddressNameChanger } from "../../settings/mailaddress/AnotherUserMailAddressNameChanger.js"
 import type { GroupInfo } from "../entities/sys/TypeRefs.js"
 import type { SendMailModel } from "../../mail/editor/SendMailModel.js"
-import type { CalendarEvent, Mail, MailboxProperties } from "../entities/tutanota/TypeRefs.js"
+import type { CalendarEvent, CalendarEventAttendee, Mail, MailboxProperties } from "../entities/tutanota/TypeRefs.js"
 import type { CalendarEventViewModel } from "../../calendar/date/CalendarEventViewModel.js"
+import { getEventWithDefaultTimes } from "../../calendar/date/CalendarEventViewModel.js"
 import type { CreateMailViewerOptions } from "../../mail/view/MailViewer.js"
 import type { RecipientsSearchModel } from "../../misc/RecipientsSearchModel.js"
 import type { MailViewerViewModel } from "../../mail/view/MailViewerViewModel.js"
@@ -92,7 +93,7 @@ import { GroupType } from "../common/TutanotaConstants.js"
 import type { ExternalLoginViewModel } from "../../login/ExternalLoginView.js"
 import type { ConversationViewModel } from "../../mail/view/ConversationViewModel.js"
 import { AlarmScheduler } from "../../calendar/date/AlarmScheduler.js"
-import { getEventWithDefaultTimes } from "../../calendar/date/CalendarEventViewModel.js"
+import type { CalendarEventEditModel } from "../../calendar/date/CalendarEventEditModel.js"
 
 assertMainOrNode()
 

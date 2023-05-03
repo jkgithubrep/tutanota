@@ -1,23 +1,29 @@
 import { px, size } from "../../../gui/size.js"
-import stream from "mithril/stream"
-import Stream from "mithril/stream"
 import { DatePicker } from "../../../gui/date/DatePicker.js"
 import { Dialog } from "../../../gui/base/Dialog.js"
 import m, { Children } from "mithril"
-import { Autocomplete, TextField, TextFieldAttrs, TextFieldType as TextFieldType } from "../../../gui/base/TextField.js"
+import { TextField, TextFieldAttrs } from "../../../gui/base/TextField.js"
 import { lang } from "../../../misc/LanguageViewModel.js"
 import type { DropDownSelectorAttrs, SelectorItemList } from "../../../gui/base/DropDownSelector.js"
 import { DropDownSelector } from "../../../gui/base/DropDownSelector.js"
 import { Icons } from "../../../gui/base/icons/Icons.js"
 import { ButtonType } from "../../../gui/base/Button.js"
 import { AlarmInterval, CalendarAttendeeStatus, defaultCalendarColor, EndType, Keys, RepeatPeriod } from "../../../api/common/TutanotaConstants.js"
-import { createRepeatRuleEndTypeValues, createRepeatRuleFrequencyValues, getStartOfTheWeekOffsetForUser } from "../../date/CalendarUtils.js"
-import { AllIcons, Icon } from "../../../gui/base/Icon.js"
+import {
+	createAlarmIntervalItems,
+	createAttendingItems,
+	createIntervalValues,
+	createRepeatRuleEndTypeValues,
+	createRepeatRuleFrequencyValues,
+	getStartOfTheWeekOffsetForUser,
+	getTimeFormatForUser,
+	iconForAttendeeStatus,
+} from "../../date/CalendarUtils.js"
+import { Icon } from "../../../gui/base/Icon.js"
 import { BootIcons } from "../../../gui/base/icons/BootIcons.js"
-import { Checkbox } from "../../../gui/base/Checkbox.js"
 import { ExpanderButton, ExpanderPanel } from "../../../gui/base/Expander.js"
 import { client } from "../../../misc/ClientDetector.js"
-import type { Guest } from "../../date/CalendarEventViewModel.js"
+import type { Guest } from "../../date/CalendarInvites.js"
 import { CalendarEventViewModel } from "../../date/CalendarEventViewModel.js"
 import { UserError } from "../../../api/main/UserError.js"
 import { theme } from "../../../gui/theme.js"
@@ -25,81 +31,30 @@ import { showBusinessFeatureRequiredDialog } from "../../../misc/SubscriptionDia
 import { BusinessFeatureRequiredError } from "../../../api/main/BusinessFeatureRequiredError.js"
 import type { MailboxDetail } from "../../../mail/model/MailModel.js"
 import { showProgressDialog } from "../../../gui/dialogs/ProgressDialog.js"
-import { CompletenessIndicator } from "../../../gui/CompletenessIndicator.js"
-import { TimePicker } from "../../../gui/TimePicker.js"
 import { getSharedGroupName } from "../../../sharing/GroupUtils.js"
 import type { DialogHeaderBarAttrs } from "../../../gui/base/DialogHeaderBar.js"
 import { askIfShouldSendCalendarUpdatesToAttendees } from "../CalendarGuiUtils.js"
 import type { CalendarInfo } from "../../model/CalendarModel.js"
 import { showUserError } from "../../../misc/ErrorHandlerImpl.js"
-import { RecipientType } from "../../../api/common/recipients/Recipient.js"
-import { MailRecipientsTextField } from "../../../gui/MailRecipientsTextField.js"
-import { assertNotNull, defer, neverNull, noOp, numberRange, ofClass } from "@tutao/tutanota-utils"
+import { assertNotNull, defer, getFirstOrThrow, noOp, ofClass } from "@tutao/tutanota-utils"
 import { createDropdown, Dropdown, PosRect } from "../../../gui/base/Dropdown.js"
-import { CalendarEvent, createEncryptedMailAddress, Mail } from "../../../api/entities/tutanota/TypeRefs.js"
-import { RecipientsSearchModel } from "../../../misc/RecipientsSearchModel.js"
+import { CalendarEvent, createEncryptedMailAddress, EncryptedMailAddress, Mail } from "../../../api/entities/tutanota/TypeRefs.js"
 import type { HtmlEditor } from "../../../gui/editor/HtmlEditor.js"
 import { IconButton } from "../../../gui/base/IconButton.js"
 import { ButtonSize } from "../../../gui/base/ButtonSize.js"
-import { ToggleButton } from "../../../gui/base/ToggleButton.js"
 import { locator } from "../../../api/main/MainLocator.js"
 import { findAttendeeInAddresses } from "../../../api/common/utils/CommonCalendarUtils.js"
 import { modal } from "../../../gui/base/Modal.js"
 import { CalendarEventEditModel } from "../../date/CalendarEventEditModel.js"
 import { EventTimeEditor } from "./EventTimeEditor.js"
-
-export const iconForAttendeeStatus: Record<CalendarAttendeeStatus, AllIcons> = Object.freeze({
-	[CalendarAttendeeStatus.ACCEPTED]: Icons.CircleCheckmark,
-	[CalendarAttendeeStatus.TENTATIVE]: Icons.CircleHelp,
-	[CalendarAttendeeStatus.DECLINED]: Icons.CircleReject,
-	[CalendarAttendeeStatus.NEEDS_ACTION]: Icons.CircleEmpty,
-	[CalendarAttendeeStatus.ADDED]: Icons.CircleEmpty,
-})
-const alarmIntervalItems = [
-	{
-		name: lang.get("comboBoxSelectionNone_msg"),
-		value: null,
-	},
-	{
-		name: lang.get("calendarReminderIntervalFiveMinutes_label"),
-		value: AlarmInterval.FIVE_MINUTES,
-	},
-	{
-		name: lang.get("calendarReminderIntervalTenMinutes_label"),
-		value: AlarmInterval.TEN_MINUTES,
-	},
-	{
-		name: lang.get("calendarReminderIntervalThirtyMinutes_label"),
-		value: AlarmInterval.THIRTY_MINUTES,
-	},
-	{
-		name: lang.get("calendarReminderIntervalOneHour_label"),
-		value: AlarmInterval.ONE_HOUR,
-	},
-	{
-		name: lang.get("calendarReminderIntervalOneDay_label"),
-		value: AlarmInterval.ONE_DAY,
-	},
-	{
-		name: lang.get("calendarReminderIntervalTwoDays_label"),
-		value: AlarmInterval.TWO_DAYS,
-	},
-	{
-		name: lang.get("calendarReminderIntervalThreeDays_label"),
-		value: AlarmInterval.THREE_DAYS,
-	},
-	{
-		name: lang.get("calendarReminderIntervalOneWeek_label"),
-		value: AlarmInterval.ONE_WEEK,
-	},
-]
+import { AttendeeListEditor } from "./AttendeeListEditor.js"
 
 /**
  * show a dialog that allows to edit a calendar event
  * @param date the date/time that should initially selected. ignored if existingEvent exists.
  * @param calendars list of calendars that we can select for this event
  * @param mailboxDetail
- * @param existingEvent optionally, event that may exist already and is edited.
+ * @param existingEvent optionally, event that may exist already and is edited
  * @param responseMail a mail containing an invite and/or update for this event?
  */
 export async function showCalendarEventEditDialog(
@@ -112,12 +67,14 @@ export async function showCalendarEventEditDialog(
 	const { HtmlEditor } = await import("../../../gui/editor/HtmlEditor.js")
 	const recipientsSearch = await locator.recipientsSearchModel()
 	const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetail.mailboxGroupRoot)
-	const selectedCalendar = existingEvent == null ? Array.from(calendars.values())[0] : calendars.get(neverNull(existingEvent._ownerGroup))
-	const editModel = new CalendarEventEditModel(
-		existingEvent ?? {},
-		selectedCalendar.group._id,
-		mailboxProperties.mailAddressProperties.map(({ mailAddress, senderName }) => createEncryptedMailAddress({ address: mailAddress, name: senderName })),
+	const selectedCalendar = getPreselectedCalendar(calendars, existingEvent)
+	const ownMailAddresses = mailboxProperties.mailAddressProperties.map(({ mailAddress, senderName }) =>
+		createEncryptedMailAddress({
+			address: mailAddress,
+			name: senderName,
+		}),
 	)
+	const editModel = new CalendarEventEditModel(existingEvent ?? {}, selectedCalendar.group._id, ownMailAddresses)
 
 	const viewModel: CalendarEventViewModel = await locator.calendarEventViewModel(
 		date,
@@ -129,11 +86,11 @@ export async function showCalendarEventEditDialog(
 		false,
 	)
 	const startOfTheWeekOffset = getStartOfTheWeekOffsetForUser(locator.logins.getUserController().userSettingsGroupRoot)
+	const timeFormat = getTimeFormatForUser(locator.logins.getUserController().userSettingsGroupRoot)
 	const groupColors = locator.logins.getUserController().userSettingsGroupRoot.groupSettings.reduce((acc, gc) => {
 		acc.set(gc.group, gc.color)
 		return acc
 	}, new Map())
-	const guestShowConfidential: Map<string, boolean> = new Map()
 	let finished = false
 
 	const descriptionEditor: HtmlEditor = new HtmlEditor("description_label")
@@ -204,9 +161,8 @@ export async function showCalendarEventEditDialog(
 				)
 				.catch(
 					ofClass(BusinessFeatureRequiredError, async (e) => {
-						const businessFeatureOrdered = await showBusinessFeatureRequiredDialog(() => e.message)
 						// entity event updates are too slow to call updateBusinessFeature()
-						viewModel.hasBusinessFeature = businessFeatureOrdered
+						viewModel.hasBusinessFeature = await showBusinessFeatureRequiredDialog(() => e.message)
 						return false
 					}),
 				)
@@ -217,69 +173,18 @@ export async function showCalendarEventEditDialog(
 		})
 	}
 
-	const attendeesExpanded = stream(viewModel.attendees.length > 0)
-	const invitationFieldText = stream("")
-	const renderInvitationField = (): Children =>
-		viewModel.canModifyGuests() ? renderAddAttendeesField(invitationFieldText, viewModel, recipientsSearch) : null
+	let attendeesExpanded: boolean = viewModel.attendees.length > 0
 
-	function renderAttendees() {
-		const ownAttendee = null // viewModel.findOwnAttendee()
-		const guests = viewModel.attendees.slice()
-
-		if (ownAttendee) {
-			const indexOfOwn = guests.indexOf(ownAttendee)
-			guests.splice(indexOfOwn, 1)
-			guests.unshift(ownAttendee)
-		}
-
-		const organizer = viewModel.organizer
-
-		if (organizer != null && guests.length > 0 && !findAttendeeInAddresses(guests, [organizer.address])) {
-			guests.unshift({
-				address: createEncryptedMailAddress({
-					name: organizer.name,
-					address: organizer.address,
-				}),
-				// Events created by Tutanota will always have the organizer in the attendee list
-				type: RecipientType.EXTERNAL,
-				status: CalendarAttendeeStatus.ADDED, // We don't know whether the organizer will be attending or not in this case
-			})
-		}
-
-		const externalGuests = viewModel.shouldShowPasswordFields()
-			? guests
-					.filter((a) => a.type === RecipientType.EXTERNAL)
-					.map((guest) => {
-						if (!guestShowConfidential.has(guest.address.address)) guestShowConfidential.set(guest.address.address, false)
-
-						return m(TextField, {
-							value: viewModel.getGuestPassword(guest),
-							autocompleteAs: Autocomplete.off,
-							type: guestShowConfidential.get(guest.address.address) ? TextFieldType.Text : TextFieldType.Password,
-							label: () =>
-								lang.get("passwordFor_label", {
-									"{1}": guest.address.address,
-								}),
-							helpLabel: () => m(".mt-s", m(CompletenessIndicator, { percentageCompleted: viewModel.getPasswordStrength(guest) })),
-							key: guest.address.address,
-							oninput: (newValue) => viewModel.updatePassword(guest, newValue),
-							injectionsRight: () => renderRevealIcon(guest.address.address),
-						})
-					})
-			: []
-		return m("", [guests.map((guest, index) => renderGuest(guest, index, viewModel, ownAttendee)), externalGuests])
-	}
-
-	const renderRevealIcon = (address: string) => {
-		return m(IconButton, {
-			title: guestShowConfidential.get(address) ? "concealPassword_action" : "revealPassword_action",
-			click: () => {
-				guestShowConfidential.set(address, !guestShowConfidential.get(address))
-			},
-			icon: guestShowConfidential.get(address) ? Icons.NoEye : Icons.Eye,
-			size: ButtonSize.Compact,
-		})
-	}
+	// const renderRevealIcon = (address: string) => {
+	// 	return m(IconButton, {
+	// 		title: guestShowConfidential.get(address) ? "concealPassword_action" : "revealPassword_action",
+	// 		click: () => {
+	// 			guestShowConfidential.set(address, !guestShowConfidential.get(address))
+	// 		},
+	// 		icon: guestShowConfidential.get(address) ? Icons.NoEye : Icons.Eye,
+	// 		size: ButtonSize.Compact,
+	// 	})
+	// }
 
 	const renderLocationField = () =>
 		m(TextField, {
@@ -345,6 +250,7 @@ export async function showCalendarEventEditDialog(
 	}
 
 	function renderDialogContent() {
+		const alarmIntervalItems = createAlarmIntervalItems()
 		return m(
 			".calendar-edit-container.pb",
 			{
@@ -361,26 +267,14 @@ export async function showCalendarEventEditDialog(
 			[
 				renderHeading(),
 				renderChangesMessage(),
-				m(
-					".mb.rel",
-					m(
-						ExpanderPanel,
-						{
-							expanded: attendeesExpanded(),
-						},
-						[m(".flex-grow", renderInvitationField()), m(".flex-grow", renderAttendees())],
-					),
-				),
-				m(EventTimeEditor, {}),
-				m(".flex.items-center.mt-s", [
-					m(Checkbox, {
-						checked: viewModel.allDay,
-						onChecked: (value) => viewModel.setAllDay(value),
-						disabled: viewModel.isReadOnlyEvent(),
-						label: () => lang.get("allDay_label"),
-					}),
-					m(".flex-grow"),
-				]),
+				//m(".mb.rel", m(ExpanderPanel, { expanded: attendeesExpanded }, m(AttendeeListEditor, { editModel, recipientsSearch }))),
+				m(EventTimeEditor, {
+					editModel,
+					// FIXME: isReadOnly?
+					disabled: false,
+					timeFormat,
+					startOfTheWeekOffset,
+				}),
 				renderRepeatRulePicker(viewModel, startOfTheWeekOffset),
 				m(".flex", [
 					renderCalendarPicker(),
@@ -430,15 +324,15 @@ export async function showCalendarEventEditDialog(
 					".mr-s",
 					m(ExpanderButton, {
 						label: "guests_label",
-						expanded: attendeesExpanded(),
-						onExpandedChange: attendeesExpanded,
+						expanded: attendeesExpanded,
+						onExpandedChange: (v) => (attendeesExpanded = v),
 						style: {
 							paddingTop: 0,
 						},
 					}),
 				),
 		}
-		return m(TextField)
+		return m(TextField, attrs)
 	}
 
 	viewModel.attendees.map(m.redraw)
@@ -486,6 +380,17 @@ export async function showCalendarEventEditDialog(
 	}
 
 	dialog.show()
+}
+
+export async function showNewCalendarEventEditDialog(existingEvent: CalendarEvent | null, calendars: ReadonlyMap<Id, CalendarInfo>): Promise<void> {}
+
+function getPreselectedCalendar(calendars: ReadonlyMap<Id, CalendarInfo>, event?: CalendarEvent): CalendarInfo {
+	const ownerGroup: string = assertNotNull(event?._ownerGroup, "existing event without ownerGroup?")
+	if (event == null || !calendars.has(ownerGroup)) {
+		return getFirstOrThrow(Array.from(calendars.values()))
+	} else {
+		return calendars.get(ownerGroup)!
+	}
 }
 
 function renderRepeatRulePicker(viewModel: CalendarEventViewModel, startOfTheWeekOffset: number): Children {
@@ -591,8 +496,8 @@ function renderEndValue(viewModel: CalendarEventViewModel, intervalValues: Selec
 	}
 }
 
-function renderStatusIcon(viewModel: CalendarEventViewModel, attendee: Guest): Children {
-	const icon = iconForAttendeeStatus[attendee.status]
+function renderStatusIcon(status: CalendarAttendeeStatus): Children {
+	const icon = iconForAttendeeStatus[status]
 	return m(Icon, {
 		icon,
 		class: "mr-s",
@@ -600,69 +505,6 @@ function renderStatusIcon(viewModel: CalendarEventViewModel, attendee: Guest): C
 			fill: theme.content_fg,
 		},
 	})
-}
-
-function createIntervalValues(): Array<{ name: string; value: number }> {
-	return numberRange(1, 256).map((n) => {
-		return {
-			name: String(n),
-			value: n,
-		}
-	})
-}
-
-function renderAddAttendeesField(text: Stream<string>, viewModel: CalendarEventViewModel, recipientsSearch: RecipientsSearchModel): Children {
-	return m(".flex.flex-column.flex-grow", [
-		m(MailRecipientsTextField, {
-			label: "addGuest_label",
-			text: text(),
-			onTextChanged: text,
-			// we dont show bubbles, we just want the search dropdown
-			recipients: [],
-			disabled: false,
-			onRecipientAdded: async (address, name, contact) => {
-				const notAvailable = viewModel.shouldShowSendInviteNotAvailable()
-				if (notAvailable) {
-					const businessFeatureOrdered = await showBusinessFeatureRequiredDialog("businessFeatureRequiredInvite_msg")
-					if (businessFeatureOrdered) {
-						//viewModel.addGuest(address, contact)
-					}
-
-					viewModel.hasBusinessFeature = businessFeatureOrdered //entity event updates are too slow to call updateBusinessFeature()
-				} else {
-					//viewModel.addGuest(address, contact)
-				}
-			},
-			onRecipientRemoved: () => {
-				// do nothing because we don't have any bubbles here
-			},
-			injectionsRight: [
-				viewModel.attendees.find((a) => a.type === RecipientType.EXTERNAL)
-					? m(ToggleButton, {
-							title: viewModel.isConfidential() ? "confidential_action" : "nonConfidential_action",
-							onToggled: (_, e) => {
-								viewModel.setConfidential(!viewModel.isConfidential())
-								e.stopPropagation()
-							},
-							icon: viewModel.isConfidential() ? Icons.Lock : Icons.Unlock,
-							toggled: viewModel.isConfidential(),
-							size: ButtonSize.Compact,
-					  })
-					: null,
-			],
-			search: recipientsSearch,
-		}),
-		viewModel.isForceUpdateAvailable()
-			? m(
-					".mt-negative-s",
-					m(Checkbox, {
-						label: () => lang.get("sendUpdates_label"),
-						onChecked: (v) => (viewModel.isForceUpdates = v),
-						checked: viewModel.isForceUpdates,
-					}),
-			  )
-			: null,
-	])
 }
 
 export function renderTwoColumnsIfFits(left: Children, right: Children): Children {
@@ -685,29 +527,19 @@ function showOrganizerDropdown(viewModel: CalendarEventViewModel, e: MouseEvent)
 	createDropdown({ lazyButtons: makeButtons, width: 300 })(e, e.target as any)
 }
 
-function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewModel, ownAttendee: Guest | null): Children {
+function renderGuest(
+	guest: {
+		address: EncryptedMailAddress
+		status: CalendarAttendeeStatus
+	},
+	index: number,
+	viewModel: CalendarEventViewModel,
+	ownAttendee: Guest | null,
+): Children {
+	const { address, status } = guest
 	const { organizer } = viewModel
 	const isOrganizer = organizer && findAttendeeInAddresses([guest], [organizer.address])
 	const editableOrganizer = isOrganizer && viewModel.canModifyOrganizer()
-	const attendingItems = [
-		{
-			name: lang.get("yes_label"),
-			value: CalendarAttendeeStatus.ACCEPTED,
-		},
-		{
-			name: lang.get("maybe_label"),
-			value: CalendarAttendeeStatus.TENTATIVE,
-		},
-		{
-			name: lang.get("no_label"),
-			value: CalendarAttendeeStatus.DECLINED,
-		},
-		{
-			name: lang.get("pending_label"),
-			value: CalendarAttendeeStatus.NEEDS_ACTION,
-			selectable: false,
-		},
-	]
 	return m(
 		".flex",
 		{
@@ -734,7 +566,7 @@ function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewMo
 									lineHeight: px(24),
 								},
 							},
-							guest.address.name ? `${guest.address.name} ${guest.address.address}` : guest.address.address,
+							address.name ? `${address.name} ${address.address}` : address.address,
 						),
 						editableOrganizer
 							? m(Icon, {
@@ -747,7 +579,7 @@ function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewMo
 					],
 				),
 				m(".small.flex.center-vertically", [
-					renderStatusIcon(viewModel, guest),
+					renderStatusIcon(status),
 					lang.get(isOrganizer ? "organizer_label" : "guest_label") + (guest === ownAttendee ? ` | ${lang.get("you_label")}` : ""),
 				]),
 			]),
@@ -763,8 +595,8 @@ function renderGuest(guest: Guest, index: number, viewModel: CalendarEventViewMo
 							},
 							m(DropDownSelector, {
 								label: "attending_label",
-								items: attendingItems,
-								selectedValue: guest.status,
+								items: createAttendingItems(),
+								selectedValue: status,
 								class: "",
 								selectionChangedHandler: (value: CalendarAttendeeStatus) => {
 									if (value == null) return

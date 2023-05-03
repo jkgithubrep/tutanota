@@ -9,7 +9,14 @@ import {
 	ShareCapability,
 	TimeFormat,
 } from "../../api/common/TutanotaConstants"
-import type { CalendarEvent, CalendarRepeatRule, EncryptedMailAddress, Mail, MailboxProperties } from "../../api/entities/tutanota/TypeRefs.js"
+import type {
+	CalendarEvent,
+	CalendarEventAttendee,
+	CalendarRepeatRule,
+	EncryptedMailAddress,
+	Mail,
+	MailboxProperties,
+} from "../../api/entities/tutanota/TypeRefs.js"
 import { CalendarEventTypeRef, createCalendarEvent, createCalendarEventAttendee, createEncryptedMailAddress } from "../../api/entities/tutanota/TypeRefs.js"
 import { AlarmInfo, createDateWrapper, DateWrapper, RepeatRule } from "../../api/entities/sys/TypeRefs.js"
 import type { MailboxDetail } from "../../mail/model/MailModel"
@@ -57,15 +64,11 @@ import { RecipientType } from "../../api/common/recipients/Recipient"
 import { ResolveMode } from "../../api/main/RecipientsModel.js"
 import { getSenderName } from "../../misc/MailboxPropertiesUtils.js"
 import { EventType } from "./CalendarEventEditModel.js"
+import { Guest } from "./CalendarInvites.js"
 
 // whether to close dialog
 export type EventCreateResult = boolean
 
-export type Guest = {
-	address: EncryptedMailAddress
-	type: RecipientType
-	status: CalendarAttendeeStatus
-}
 type SendMailModelFactory = () => SendMailModel
 
 export type RepeatData = {
@@ -632,6 +635,12 @@ export class CalendarEventViewModel {
 		])
 	}
 
+	/**
+	 * whether this user can send updates for this event.
+	 * * this needs to be our event.
+	 * * we need the business feature
+	 * * there need to be changes that permit updates
+	 */
 	isForceUpdateAvailable(): boolean {
 		return true //this.eventType === EventType.OWN && !this.shouldShowSendInviteNotAvailable() && this.hasUpdatableAttendees()
 	}
@@ -962,7 +971,10 @@ export class CalendarEventViewModel {
 		const calendarArray = Array.from(this.calendars.values())
 
 		if (this.isReadOnlyEvent()) {
-			return calendarArray.filter((calendarInfo) => calendarInfo.group._id === assertNotNull(this.existingEvent)._ownerGroup)
+			return calendarArray.filter(
+				(calendarInfo) =>
+					calendarInfo.group._id === assertNotNull(this.existingEvent, "no available calendars for existing event without ownerGroup")._ownerGroup,
+			)
 		} else if (this.attendees.length > 0 || this.eventType === EventType.INVITE) {
 			// We don't allow inviting in a shared calendar. If we have attendees, we cannot select a shared calendar
 			// We also don't allow accepting invites into shared calendars.
