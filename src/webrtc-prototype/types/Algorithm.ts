@@ -1,7 +1,5 @@
-import uuid from "uuid"
-
 // This ID forms a Lamport Clock timestamp. (id, clock)
-// TODO Im not sure if we need this ID for the actual content.
+// TODO I'm not sure if we need this ID for the actual content.
 //  I think we just need this ID for sending Transactions across multiple clients.
 //  Why would we need to know the Version on the Item itself? We just need to identify it.
 export class ID {
@@ -63,7 +61,8 @@ export class TextContent implements Content {
 	data: string
 	isDeleted: boolean
 
-	constructor(id: string, left: TextContent, right: TextContent, origin: TextContent, data: string, isDeleted: boolean = false) {
+	constructor(id: string, data: string, isDeleted: boolean = false, left: TextContent | null,
+				right: TextContent | null, origin: TextContent | null) {
 		this.id = id
 		this.left = left
 		this.right = right

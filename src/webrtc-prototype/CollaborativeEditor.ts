@@ -13,6 +13,7 @@ import { IconButton } from "../gui/base/IconButton.js"
 import { Icons } from "../gui/base/icons/Icons.js"
 import { SessionStatus, WebRTCSessionHandler } from "./WebRTCSessionHandler.js"
 import { TextField, TextFieldAttrs, TextFieldType } from "../gui/base/TextField.js"
+import { CRDTDocument } from "./types/CRDTDocument.js"
 
 export function showCollaborativeEditor(): void {
 	const editorModel = new CollaborativeEditorModel()
@@ -53,6 +54,7 @@ const pDOM: DOMOutputSpec = ["p", 0], blockquoteDOM: DOMOutputSpec = ["blockquot
 
 class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 	editorView: EditorView | null
+	doc: CRDTDocument | null
 	schema: Schema
 	sessionHandler: WebRTCSessionHandler | null
 
@@ -74,6 +76,7 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 		})
 		this.editorView = null
 		this.sessionHandler = null
+		this.doc = new CRDTDocument(this.schema)
 	}
 
 	view(vnode: Vnode<CollaborativeEditorModel>): Children {
@@ -242,7 +245,10 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 		this.editorView = new EditorView(domElement, {
 			state: EditorState.create({
 				schema: this.schema,
-				plugins: this.createKeymap(this.schema)
+				plugins: this.createKeymap(this.schema),
+				// dispatchTransaction: (tr) => {
+				//
+				// }
 			})
 		})
 	}
