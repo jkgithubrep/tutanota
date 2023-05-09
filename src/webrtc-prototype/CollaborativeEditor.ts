@@ -3,7 +3,7 @@ import { CollaborativeEditorModel } from "./CollaborativeEditorModel.js"
 import { DOMOutputSpec, Schema } from "prosemirror-model"
 import { EditorView } from "prosemirror-view"
 import { pcBaseKeymap } from "prosemirror-commands"
-import { EditorState } from "prosemirror-state"
+import { EditorState, TextSelection } from "prosemirror-state"
 import { TabIndex } from "../api/common/TutanotaConstants.js"
 import { DialogHeaderBarAttrs } from "../gui/base/DialogHeaderBar.js"
 import { Button, ButtonType } from "../gui/base/Button.js"
@@ -14,6 +14,7 @@ import { Icons } from "../gui/base/icons/Icons.js"
 import { SessionStatus, WebRTCSessionHandler } from "./WebRTCSessionHandler.js"
 import { TextField, TextFieldAttrs, TextFieldType } from "../gui/base/TextField.js"
 import { CRDTDocument } from "./types/CRDTDocument.js"
+import { applyCRDTTransactionToProsemirrorState, applyProsemirrorTransactionToCRDTDocumentState } from "./types/StateTransformer.js"
 
 export function showCollaborativeEditor(): void {
 	const editorModel = new CollaborativeEditorModel()
@@ -242,14 +243,36 @@ class CollaborativeEditor implements Component<CollaborativeEditorModel> {
 	}
 
 	initEditor(domElement: HTMLElement) {
+		let state = EditorState.create({
+			schema: this.schema,
+			plugins: this.createKeymap(this.schema)
+		})
 		this.editorView = new EditorView(domElement, {
-			state: EditorState.create({
-				schema: this.schema,
-				plugins: this.createKeymap(this.schema),
-				// dispatchTransaction: (tr) => {
-				//
-				// }
-			})
+			state: state,
+			dispatchTransaction: (tr) => {
+				let state = this.editorView?.state
+				if (this.doc && state) {
+					const crdtTr = applyProsemirrorTransactionToCRDTDocumentState(tr, this.doc)
+
+					if (crdtTr) {
+						const newTr = applyCRDTTransactionToProsemirrorState(state, crdtTr, this.doc)
+						state = state.apply(newTr)
+					}
+
+					if (tr.selectionSet) {
+						state = state.apply(
+							state.tr.setSelection(
+								new TextSelection(
+									state.doc.resolve(tr.selection.anchor),
+									state.doc.resolve(tr.selection.head)
+								)
+							)
+						)
+					}
+
+					this.editorView?.updateState(state)
+				}
+			}
 		})
 	}
 

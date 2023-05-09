@@ -1,5 +1,5 @@
 import { EditorState, Transaction } from "prosemirror-state"
-import { CRDTDocument, CRDTPos, CRDTTransaction, DeleteOperation, InsertOperation, Operation, OperationType } from "./CRDTDocument.js"
+import { CRDTDocument, CRDTPos, CRDTTransaction, DeleteOperation, InsertNodeOperation, InsertOperation, Operation, OperationType } from "./CRDTDocument.js"
 import { Fragment, Slice } from "prosemirror-model"
 import { ReplaceStep } from "prosemirror-transform"
 import { TextContent } from "./Algorithm.js"
@@ -18,19 +18,43 @@ export function getCRDTPosFromProsemirrorPos(pos: number, doc: CRDTDocument): CR
 	const data = doc.getArrayRepresentation()
 	let index = pos
 	let arrIndex = 0
-	for (let i = 0; i < data.length - 1; i++) {
-		if (i == 0) index-- // decrement once to account for offset of 1 from Prosemirror Position
-		index -= 2
-		let greatestIndex = data[i].length - 1
-		if ((greatestIndex) < index) {
+	for (let i = 0; arrIndex < data.length; i++) {
+		// if (i == 0)
+		// 	index-- // decrement once to account for offset of 1 from Prosemirror Position
+		// if (arrIndex > 0) {
+			index = clamp(index-1, index, 0)
+		// }
+		let greatestIndex = clamp(data[i].length - 1, data[i].length, 0)
+		if (greatestIndex == index-1) { // this means we are trying to add to the end of a paragraph, but not the next one.
+			return {array: arrIndex, index: index}
+		} else if (greatestIndex < index) {
 			arrIndex++
-			index -= greatestIndex
+			index -= greatestIndex - 2
 		} else {
+			// index = clamp(index, clamp(data[i].length - 1, data[i].length, 0), 0)
 			break
 		}
 	}
 
 	return { array: arrIndex, index: index }
+}
+
+/**
+ * "Clamps" a given number between an upper and lower bound. Example:
+ * clamp(10, 5, 0) = 5
+ * clamp(10-100, 10, -10) = -5
+ * clamp(10-5, 10, 0) = 5
+ *
+ * @param num Number to clamp
+ * @param upper Upper bound
+ * @param lower Lower bound
+ */
+function clamp(num: number, upper: number, lower: number): number {
+	return num < upper
+		? num > lower
+			? num
+			: lower
+		: upper
 }
 
 /**
@@ -46,10 +70,10 @@ export function getProsemirrorPosFromCRDTPos(pos: CRDTPos, doc: CRDTDocument): n
 	const data = doc.getArrayRepresentation()
 	let index = 0
 	for (let i = 0; i < pos.array; i++) {
-		index += data[i].length + 2 // +2 to account for tags
+		index += data[i].length + 1 // +1 to account for tags
 		if (i == 0) index-- // -1 to account for first line not having two tags but one
 	}
-	index += pos.index + 2
+	index += pos.index + 1 /* + 2 */
 	return index
 }
 
@@ -72,6 +96,26 @@ export function applyCRDTTransactionToProsemirrorState(state: EditorState, tr: C
 				break
 			}
 
+			case OperationType.INSERT_NODE: {
+				const operation: InsertNodeOperation = op as InsertNodeOperation
+				const contents: String[] = []
+				operation.content.forEach(c => {
+					contents.push(c.data)
+				})
+				const content = contents.join(" ") // forms a sentence from all Contents
+				const pmpos = getProsemirrorPosFromCRDTPos(operation.position, doc)
+				transaction.split(pmpos)
+				// transaction.replace(
+				// 	pmpos,
+				// 	pmpos,
+				// 	new Slice(
+				// 		Fragment.from(doc.getSchema().node("paragraph", null,
+				// 			doc.schema.text(content))), 0, 0
+				// 	)
+				// )
+				break
+			}
+
 			case OperationType.DELETE: {
 				const operation: DeleteOperation = op as DeleteOperation
 				const pmFrom = getProsemirrorPosFromCRDTPos(operation.position.from, doc)
@@ -79,11 +123,7 @@ export function applyCRDTTransactionToProsemirrorState(state: EditorState, tr: C
 				transaction.replace(
 					pmFrom,
 					pmTo,
-					new Slice(
-						Fragment.from(doc.getSchema().text("")),
-						0,
-						0
-					)
+					Slice.empty
 				)
 				break
 			}
@@ -98,6 +138,27 @@ export function applyProsemirrorTransactionToCRDTDocumentState(tr: Transaction, 
 	for (const step of tr.steps) {
 		if (step instanceof ReplaceStep) {
 			if (step.slice) {
+
+				// this means that there are nodes being inserted
+				// if (step.slice.content.size > 1) {
+				// 	const pos = getCRDTPosFromProsemirrorPos(step.from, doc)
+				//
+				// 	const array = doc.getArrayRepresentation()[pos.array]
+				//
+				// 	// Inserting a new Node means that we are either line breaking
+				// 	// somewhere in the paragraph, or at the end. No matter what, we can splice
+				// 	// the contents from the index at which we want to insert the node, take all the
+				// 	// content that comes after it and insert it in a new node (array).
+				// 	// splice() returns the elements that we removed.
+				// 	const content = array.splice(pos.index, array.length)
+				// 	const op = new InsertNodeOperation(content, pos)
+				// 	operations.push(op)
+				//
+				// 	// TODO
+				// 	//  This only takes care of a singular node though, we might have more being
+				// 	//  inserted, e.g. if someone copies and pastes multiple nodes.
+				// }
+
 				if (step.from !== step.to) {
 					const crdtFrom = getCRDTPosFromProsemirrorPos(step.from, doc)
 					const crdtTo = getCRDTPosFromProsemirrorPos(step.to, doc)
@@ -106,10 +167,15 @@ export function applyProsemirrorTransactionToCRDTDocumentState(tr: Transaction, 
 				}
 
 				const content = step.slice.content.textBetween(0, step.slice.content.size)
-				const crdtContent = new TextContent("id", content, false, null, null, null)
-
-				const op = new InsertOperation(crdtContent, getCRDTPosFromProsemirrorPos(step.from, doc))
-				operations.push(op)
+				if (content !== "") {
+					let index = step.from
+					for (const str of content.split("")) {
+						const crdtContent = new TextContent("id", str, false, null, null, null)
+						const op = new InsertOperation(crdtContent, getCRDTPosFromProsemirrorPos(index, doc))
+						operations.push(op)
+						index++
+					}
+				}
 			} else {
 				const crdtFrom = getCRDTPosFromProsemirrorPos(step.from, doc)
 				const crdtTo = getCRDTPosFromProsemirrorPos(step.to, doc)

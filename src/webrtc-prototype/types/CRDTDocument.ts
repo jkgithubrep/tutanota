@@ -21,6 +21,7 @@ export class CRDTTransaction {
 
 export enum OperationType {
 	INSERT = "insert",
+	INSERT_NODE = "node",
 	DELETE = "delete"
 }
 
@@ -29,7 +30,7 @@ export enum OperationType {
  */
 export interface Operation {
 	type: OperationType
-	content: Content | null
+	content: Content | Content[] | null
 	/** Index at which Operation shall be done */
 	position: CRDTPos | { from: CRDTPos, to: CRDTPos }
 }
@@ -43,6 +44,20 @@ export class InsertOperation implements Operation {
 		this.content = content
 		this.position = position
 		this.type = OperationType.INSERT
+	}
+}
+
+export class InsertNodeOperation implements Operation {
+	/** Content is an Array of all content that will
+	 * be moved from current the paragraph to the next. */
+	content: Content[]
+	position: CRDTPos
+	type: OperationType
+
+	constructor(content: Content[], position: CRDTPos) {
+		this.content = content
+		this.position = position
+		this.type = OperationType.INSERT_NODE
 	}
 }
 
@@ -172,6 +187,18 @@ export class CRDTDocument {
 	}
 
 	/**
+	 * Inserts a new Node at a given position. Does not delete content out of old
+	 * Node, as that has already been taken care of with splice() when creating
+	 * the Operation. Thus, we just have to insert a singular, new node with
+	 * the Content we are passing this function.
+	 * @param content Contents that shall be added to new node
+	 * @param pos Position in the Double-Array to add the new node
+	 */
+	public insertNewNode(content: TextContent[], pos: CRDTPos) {
+		this.data.splice(pos.array, 0, content)
+	}
+
+	/**
 	 * Marks every Content between 'from' and 'to' (inclusive)
 	 * as deleted. (isDeleted = true)
 	 * We cannot delete all characters because otherwise we would
@@ -184,32 +211,47 @@ export class CRDTDocument {
 			// Deletion does not span multiple arrays
 			const array = this.data[from.array] // array to delete in
 
-			// Mark every Content between 'from' and 'to' (inclusive) as deleted
+			// FIXME Mark every Content between 'from' and 'to' (inclusive) as deleted
+			//  this currently does not work because our Index calculation is completely
+			//  destroyed if we just mark the Content as "deleted".
+			// Delete all Content between 'from' and 'to' (inclusive)
 			let index = from.index
-			for (index ; index <= to.index ; index++) {
-				array[index].isDeleted = true
-			}
+			array.splice(index, (to.index - index) + 1)
+			// for (index; index < to.index; index++) {
+			// 	// array[index].isDeleted = true
+			// }
 		} else {
 			// Deletion spans >= 2 arrays
 			// This would mean that we are deleting across multiple paragraphs in the Editor
 			// TODO check how long this takes. We don't want the CRDT Doc to bottleneck in the back
+
+			// First delete everything at the start and end, then delete the Arrays inbetween
 			const firstArray = this.data[from.array]
 			let firstIndex = from.index
-			for (firstIndex ; firstIndex < firstArray.length ; firstIndex++) {
-				firstArray[firstIndex].isDeleted = true
-			}
+			firstArray.splice(firstIndex, (firstArray.length - 1) - firstIndex)
 
-			for (let arrIndex = from.array + 1 ; arrIndex < to.array ; arrIndex++) {
-				this.data[arrIndex].forEach(c => {
-					c.isDeleted = true
-				})
-			}
 
 			const lastArray = this.data[to.array]
 			let lastIndex = to.index
-			for (lastIndex ; lastIndex < to.index ; lastIndex++) {
-				lastArray[lastIndex].isDeleted = true
+			lastArray.splice(0, to.index + 1)
+
+			// 'to' and 'from' are not in neighbouring arrays -> delete every array inbetween
+			if (to.array > from.array + 1) {
+				this.data.splice(from.array + 1, (to.array - from.array) - 1)
 			}
+			// for (firstIndex; firstIndex < firstArray.length; firstIndex++) {
+			// 	firstArray[firstIndex].isDeleted = true
+			// }
+
+			// for (let arrIndex = from.array + 1; arrIndex < to.array; arrIndex++) {
+			// 	this.data[arrIndex].forEach(c => {
+			// 		c.isDeleted = true
+			// 	})
+
+			// }
+			// for (lastIndex; lastIndex < to.index; lastIndex++) {
+			// 	lastArray[lastIndex].isDeleted = true
+			// }
 		}
 	}
 
@@ -238,9 +280,13 @@ export class CRDTDocument {
 			if (op instanceof InsertOperation) {
 				this.insert(op.position, op.content)
 				tr.add(op)
+			} else if (op instanceof InsertNodeOperation) {
+				this.insertNewNode(op.content, op.position)
+				tr.add(op)
 			} else {
 				const del = op as DeleteOperation
 				this.delete(del.position.from, del.position.to)
+				tr.add(op)
 			}
 		})
 		return tr
@@ -267,8 +313,8 @@ export class CRDTDocument {
 
 
 	constructor(schema: Schema) {
-		this.nodes = new Array<Content>()
-		this.data = new Array<Array<TextContent>>()
+		this.nodes = []
+		this.data = [[]]
 		this.currentPos = {
 			array: 0,
 			index: 0
