@@ -1,4 +1,4 @@
-import { EditorState, Transaction } from "prosemirror-state"
+import { AllSelection, EditorState, Transaction } from "prosemirror-state"
 import { CRDTDocument, CRDTPos, CRDTTransaction, DeleteOperation, InsertNodeOperation, InsertOperation, Operation, OperationType } from "./CRDTDocument.js"
 import { Fragment, Slice } from "prosemirror-model"
 import { ReplaceStep } from "prosemirror-transform"
@@ -22,11 +22,11 @@ export function getCRDTPosFromProsemirrorPos(pos: number, doc: CRDTDocument): CR
 		// if (i == 0)
 		// 	index-- // decrement once to account for offset of 1 from Prosemirror Position
 		// if (arrIndex > 0) {
-			index = clamp(index-1, index, 0)
+		index = clamp(index - 1, index, 0)
 		// }
 		let greatestIndex = clamp(data[i].length - 1, data[i].length, 0)
-		if (greatestIndex == index-1) { // this means we are trying to add to the end of a paragraph, but not the next one.
-			return {array: arrIndex, index: index}
+		if (greatestIndex == index - 1) { // this means we are trying to add to the end of a paragraph, but not the next one.
+			return { array: arrIndex, index: index }
 		} else if (greatestIndex < index) {
 			arrIndex++
 			index -= greatestIndex - 2
@@ -159,10 +159,23 @@ export function applyProsemirrorTransactionToCRDTDocumentState(tr: Transaction, 
 				// 	//  inserted, e.g. if someone copies and pastes multiple nodes.
 				// }
 
+
 				if (step.from !== step.to) {
 					const crdtFrom = getCRDTPosFromProsemirrorPos(step.from, doc)
-					const crdtTo = getCRDTPosFromProsemirrorPos(step.to, doc)
+					let crdtTo
+
+					// if step.from == 0, then the text has been selected using ctrl + A, which
+					// creates a different selection than selecting the entire paragraph manually.
+					// The selection then starts at 0 and spans until paragraph.size+1, whereas usually
+					// it only spans from 1 to paragraph.size. We have to account for this manually, as
+					// otherwise it produces an error with our CRDTPos calculation.
+					if (step.from == 0) {
+						crdtTo = getCRDTPosFromProsemirrorPos(step.to - 1, doc)
+					} else {
+						crdtTo = getCRDTPosFromProsemirrorPos(step.to, doc)
+					}
 					const op = new DeleteOperation(crdtFrom, crdtTo)
+					doc.delete(op.position.from, op.position.to)
 					operations.push(op)
 				}
 
@@ -172,6 +185,7 @@ export function applyProsemirrorTransactionToCRDTDocumentState(tr: Transaction, 
 					for (const str of content.split("")) {
 						const crdtContent = new TextContent("id", str, false, null, null, null)
 						const op = new InsertOperation(crdtContent, getCRDTPosFromProsemirrorPos(index, doc))
+						doc.insert(op.position, op.content)
 						operations.push(op)
 						index++
 					}
@@ -180,6 +194,7 @@ export function applyProsemirrorTransactionToCRDTDocumentState(tr: Transaction, 
 				const crdtFrom = getCRDTPosFromProsemirrorPos(step.from, doc)
 				const crdtTo = getCRDTPosFromProsemirrorPos(step.to, doc)
 				const op = new DeleteOperation(crdtFrom, crdtTo)
+				doc.delete(op.position.from, op.position.to)
 				operations.push(op)
 			}
 		}

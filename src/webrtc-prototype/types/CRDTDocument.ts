@@ -216,7 +216,7 @@ export class CRDTDocument {
 			//  destroyed if we just mark the Content as "deleted".
 			// Delete all Content between 'from' and 'to' (inclusive)
 			let index = from.index
-			array.splice(index, (to.index - index) + 1)
+			array.splice(index, (to.index - index))
 			// for (index; index < to.index; index++) {
 			// 	// array[index].isDeleted = true
 			// }
@@ -278,14 +278,14 @@ export class CRDTDocument {
 		)
 		ops.forEach(op => {
 			if (op instanceof InsertOperation) {
-				this.insert(op.position, op.content)
+				// this.insert(op.position, op.content)
 				tr.add(op)
 			} else if (op instanceof InsertNodeOperation) {
-				this.insertNewNode(op.content, op.position)
+				// this.insertNewNode(op.content, op.position)
 				tr.add(op)
 			} else {
 				const del = op as DeleteOperation
-				this.delete(del.position.from, del.position.to)
+				// this.delete(del.position.from, del.position.to)
 				tr.add(op)
 			}
 		})
