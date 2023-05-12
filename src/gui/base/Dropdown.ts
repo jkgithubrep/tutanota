@@ -368,7 +368,7 @@ export function createAsyncDropdown({
 	withBackground?: boolean
 }): clickHandler {
 	// not all browsers have the actual button as e.currentTarget, but all of them send it as a second argument (see https://github.com/tutao/tutanota/issues/1110)
-	return (e, dom) => {
+	return (_, dom) => {
 		const originalButtons = lazyButtons()
 		let buttonsResolved = false
 		originalButtons.then(() => {
@@ -412,6 +412,7 @@ export function showDropdownAtPosition(buttons: ReadonlyArray<DropdownChildAttrs
 type AttachDropdownParams = {
 	mainButtonAttrs: Omit<IconButtonAttrs, "click">
 	childAttrs: lazy<$Promisable<ReadonlyArray<DropdownChildAttrs | null>>>
+	/** called to determine if the dropdown actually needs to be shown */
 	showDropdown?: lazy<boolean>
 	width?: number
 	overrideOrigin?: (original: PosRect) => PosRect
@@ -419,8 +420,7 @@ type AttachDropdownParams = {
 
 /**
  *
- * @param mainButtonAttrs the attributes of the main button. if showDropdown returns false, this buttons onclick will
- * be executed instead of opening the dropdown.
+ * @param mainButtonAttrs the attributes of the main button. if showDropdown returns false, nothing will happen.
  * @param childAttrs the attributes of the children shown in the dropdown
  * @param showDropdown this will be checked before showing the dropdown
  * @param width width of the dropdown

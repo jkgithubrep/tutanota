@@ -6,6 +6,7 @@ import {
 	getEndOfDay,
 	getFromMap,
 	getStartOfDay,
+	identity,
 	incrementDate,
 	insertIntoSortedArray,
 	isSameDay,
@@ -723,7 +724,7 @@ export function addDaysForEvent(events: Map<number, Array<CalendarEvent>>, event
 /**
  * Returns the end date of a repeating rule that can be used to display in the ui.
  * The actual end date that is stored on the repeat rule is always one day behind the displayed end date. The end date is always excluded
- * but to  display the end date we want show the last date of the period which is included.
+ * but to  display the end date we want to show the last date of the period which is included.
  * @returns {Date}
  */
 export function getRepeatEndTime(repeatRule: RepeatRule, isAllDay: boolean, timeZone: string): Date {
@@ -833,9 +834,11 @@ function* generateEventOccurrences(event: CalendarEvent, timeZone: string): Gene
  * return true if an event has more than one visible occurrence according to its repeat rule and excluded dates
  *
  * will compare exclusion time stamps with the exact date-time value of the occurrences startTime
+ *
+ * FIXME: this needs to take reschedulings into account.
  * @param event the calendar event to check
  */
-export function calendarEventHasMoreThanOneOccurrencesLeft(event: CalendarEvent): boolean {
+export function calendarEventHasMoreThanOneOccurrencesLeft(event: Readonly<CalendarEvent>): boolean {
 	if (event.repeatRule == null) {
 		return false
 	}
@@ -1125,10 +1128,22 @@ export const iconForAttendeeStatus: Record<CalendarAttendeeStatus, AllIcons> = O
 	[CalendarAttendeeStatus.ADDED]: Icons.CircleEmpty,
 })
 
-export function incrementSequence(sequence: string, isOwnEvent: boolean): string {
+/**
+ *
+ * https://www.kanzaki.com/docs/ical/sequence.html
+ * The "Organizer" includes this property in an iCalendar object that it sends to an
+ * "Attendee" to specify the current version of the calendar component.
+ *
+ * The "Attendee" includes this property in an iCalendar object that it sends to the "Organizer"
+ * to specify the version of the calendar component that the "Attendee" is referring to.
+ *
+ * @param sequence
+ * @param mayIncrement whether we are allowed to change the sequence number in the event.
+ */
+export function incrementSequence(sequence: string, mayIncrement: boolean): string {
 	const current = filterInt(sequence) || 0
 	// Only the organizer should increase sequence numbers
-	return String(isOwnEvent ? current + 1 : current)
+	return String(mayIncrement ? current + 1 : current)
 }
 
 export function getNextHalfHour(): Date {
@@ -1155,16 +1170,19 @@ export function findPrivateCalendar(calendarInfo: Map<Id, CalendarInfo>): Calend
 }
 
 /**
- * Prepare calendar event description to be shown to the user. Must be called *before* sanitizing.
+ * Prepare calendar event description to be shown to the user.
  *
  * It is needed to fix special format of links from Outlook which otherwise disappear during sanitizing.
  * They look like this:
  * ```
  * text<https://example.com>
  * ```
+ *
+ * @param description description to clean up
+ * @param sanitizer optional sanitizer to apply after preparing the description
  */
-export function prepareCalendarDescription(description: string): string {
-	return description.replace(/<(http|https):\/\/[A-z0-9$-_.+!*‘(),\/?]+>/gi, (possiblyLink) => {
+export function prepareCalendarDescription(description: string, sanitizer: (s: string) => string = identity): string {
+	const prepared = description.replace(/<(http|https):\/\/[A-z0-9$-_.+!*‘(),\/?]+>/gi, (possiblyLink) => {
 		try {
 			const withoutBrackets = possiblyLink.slice(1, -1)
 			const url = new URL(withoutBrackets)
@@ -1173,6 +1191,8 @@ export function prepareCalendarDescription(description: string): string {
 			return possiblyLink
 		}
 	})
+
+	return sanitizer(prepared)
 }
 
 export const DEFAULT_HOUR_OF_DAY = 6
@@ -1269,11 +1289,7 @@ export const createRepeatRuleEndTypeValues = lazyMemoized((): SelectorItemList<E
 export const createIntervalValues = lazyMemoized((): SelectorItemList<number> => numberRange(1, 256).map((n) => ({ name: String(n), value: n })))
 
 export const createAlarmIntervalItems = lazyMemoized(
-	(): SelectorItemList<AlarmInterval | null> => [
-		{
-			name: lang.get("comboBoxSelectionNone_msg"),
-			value: null,
-		},
+	(): SelectorItemList<AlarmInterval> => [
 		{
 			name: lang.get("calendarReminderIntervalFiveMinutes_label"),
 			value: AlarmInterval.FIVE_MINUTES,

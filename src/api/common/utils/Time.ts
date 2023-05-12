@@ -2,7 +2,7 @@ import { pad } from "@tutao/tutanota-utils"
 import type { DateTime } from "luxon"
 
 /**
- * A wrapper around time handling for the calendar stuff, mostly for the CalendarEventViewModel
+ * A wrapper around time handling for the calendar stuff, mostly for the CalendarEventWhenModel
  */
 export class Time {
 	readonly hours: number

@@ -1,8 +1,8 @@
 import o from "ospec"
 // @ts-ignore[untyped-import]
 import en from "../../../src/translations/en.js"
-import type { Guest } from "../../../src/calendar/date/CalendarEventViewModel.js"
-import { areExcludedDatesEqual, CalendarEventViewModel } from "../../../src/calendar/date/CalendarEventViewModel.js"
+import type { Guest } from "../../../src/calendar/date/CalendarEventSaveModel.js"
+import { areExcludedDatesEqual, CalendarEventSaveModel } from "../../../src/calendar/date/CalendarEventSaveModel.js"
 import { lang } from "../../../src/misc/LanguageViewModel.js"
 import { assertThrows, unmockAttribute } from "@tutao/tutanota-test-utils"
 import { addMapEntry, clone, delay, downcast, LazyLoaded, neverNull, noOp } from "@tutao/tutanota-utils"
@@ -78,7 +78,7 @@ let internalAddresses: string[] = []
 let resolveRecipientMs = 100
 let mockedAttributeReferences = []
 
-o.spec("CalendarEventViewModel", function () {
+o.spec("CalendarEventSaveModel", function () {
 	let inviteModel: SendMailModel
 	let updateModel: SendMailModel
 	let cancelModel: SendMailModel
@@ -107,7 +107,7 @@ o.spec("CalendarEventViewModel", function () {
 		existingEvent: CalendarEvent | null
 		mail?: Mail | null | undefined
 		existingContacts?: Array<Contact>
-	}): Promise<CalendarEventViewModel> {
+	}): Promise<CalendarEventSaveModel> {
 		const loginController: LoginController = downcast({
 			getUserController: () => userController,
 			isInternalUserLoggedIn: () => true,
@@ -208,7 +208,7 @@ o.spec("CalendarEventViewModel", function () {
 			response: () => responseModel,
 		}
 
-		const viewModel = new CalendarEventViewModel(
+		const viewModel = new CalendarEventSaveModel(
 			userController,
 			distributor,
 			calendarModel,
@@ -3065,203 +3065,6 @@ o.spec("CalendarEventViewModel", function () {
 			await viewModel.updateCustomerFeatures()
 			const notAvailable = viewModel.shouldShowSendInviteNotAvailable()
 			o(notAvailable).equals(false)
-		})
-	})
-	o.spec("deleteExcludedDates", async function () {
-		o("clears the array", async function () {
-			const userController = makeUserController()
-			const viewModel = await init({
-				userController,
-				calendars: makeCalendars("own"),
-				existingEvent: createCalendarEvent({
-					repeatRule: createRepeatRule({
-						excludedDates: [createDateWrapper({ date: new Date("2023-03-13T00:00:00Z") })],
-					}),
-				}),
-			})
-
-			viewModel.deleteExcludedDates()
-			o(viewModel.repeat?.excludedDates).deepEquals([])
-		})
-		o("end occurrence changes delete exclusions", async function () {
-			const userController = makeUserController()
-			const excludedDates = [new Date("2023-03-13T00:00:00Z")]
-			const viewModel = await init({
-				userController,
-				calendars: makeCalendars("own"),
-				existingEvent: createCalendarEvent({
-					repeatRule: createRepeatRule({
-						frequency: "1",
-						interval: "1",
-						endType: EndType.Count,
-						endValue: "10",
-						excludedDates: excludedDates.map((date) => createDateWrapper({ date })),
-					}),
-				}),
-			})
-
-			viewModel.onEndOccurencesSelected(10)
-			o(viewModel.repeat?.excludedDates).deepEquals(excludedDates)
-			viewModel.onEndOccurencesSelected(2)
-			o(viewModel.repeat?.excludedDates).deepEquals([])
-		})
-		o("interval changes delete exclusions", async function () {
-			const userController = makeUserController()
-			const excludedDates = [new Date("2023-03-13T00:00:00Z")]
-			const viewModel = await init({
-				userController,
-				calendars: makeCalendars("own"),
-				existingEvent: createCalendarEvent({
-					repeatRule: createRepeatRule({
-						frequency: "1",
-						interval: "1",
-						endType: EndType.Count,
-						endValue: "10",
-						excludedDates: excludedDates.map((date) => createDateWrapper({ date })),
-					}),
-				}),
-			})
-
-			viewModel.onRepeatIntervalChanged(1)
-			o(viewModel.repeat?.excludedDates).deepEquals(excludedDates)
-			viewModel.onRepeatIntervalChanged(2)
-			o(viewModel.repeat?.excludedDates).deepEquals([])
-		})
-		o("frequency changes delete exclusions", async function () {
-			const userController = makeUserController()
-			const excludedDates = [new Date("2023-03-13T00:00:00Z")]
-			const viewModel = await init({
-				userController,
-				calendars: makeCalendars("own"),
-				existingEvent: createCalendarEvent({
-					repeatRule: createRepeatRule({
-						frequency: "1",
-						interval: "1",
-						endType: EndType.Count,
-						endValue: "10",
-						excludedDates: excludedDates.map((date) => createDateWrapper({ date })),
-					}),
-				}),
-			})
-
-			viewModel.onRepeatPeriodSelected(RepeatPeriod.WEEKLY)
-			o(viewModel.repeat?.excludedDates).deepEquals(excludedDates)
-			viewModel.onRepeatPeriodSelected(RepeatPeriod.DAILY)
-			o(viewModel.repeat?.excludedDates).deepEquals([])
-		})
-		o("end date changes delete exclusions", async function () {
-			const userController = makeUserController()
-			const excludedDates = [new Date("2023-04-13T15:00:00Z")]
-			const originalUntilDate = new Date("2023-05-13T00:00:00Z")
-			let b = new Date(parseInt(originalUntilDate.getTime().toString()))
-			const viewModel = await init({
-				userController,
-				calendars: makeCalendars("own"),
-				existingEvent: createCalendarEvent({
-					startTime: new Date("2023-01-13T15:00:00Z"),
-					endTime: new Date("2023-01-13T20:00:00Z"),
-					repeatRule: createRepeatRule({
-						frequency: RepeatPeriod.DAILY,
-						interval: "1",
-						endType: EndType.UntilDate,
-						endValue: originalUntilDate.getTime().toString(),
-						excludedDates: excludedDates.map((date) => createDateWrapper({ date })),
-					}),
-				}),
-			})
-
-			viewModel.onRepeatEndDateSelected(new Date(viewModel.repeat!.endValue))
-			o(viewModel.repeat?.excludedDates).deepEquals(excludedDates)
-			viewModel.onRepeatEndDateSelected(new Date("2023-06-13T00:00:00Z"))
-			o(viewModel.repeat?.excludedDates).deepEquals([])
-		})
-	})
-	o.spec("excludeThisOccurence", function () {
-		o("no exclusion is added if event has no repeat rule", async function () {
-			const userController = makeUserController()
-			const viewModel = await init({
-				userController,
-				calendars: makeCalendars("own"),
-				existingEvent: createCalendarEvent({ startTime: new Date("2023-03-13T00:00:00Z") }),
-			})
-
-			await viewModel.excludeThisOccurrence()
-			o(viewModel.repeat).equals(null)
-		})
-		o("adding two exclusions in reverse order sorts them", async function () {
-			const userController = makeUserController()
-			const calendars = new Map()
-			calendars.set("ownerGroup", {
-				groupRoot: null,
-				longEvents: new LazyLoaded(async () => []),
-				groupInfo: null,
-				group: null,
-				shared: false,
-			})
-			const viewModel = await init({
-				userController,
-				calendars,
-				existingEvent: createCalendarEvent({
-					_id: ["listId", "elementId"],
-					_ownerGroup: "ownerGroup",
-					startTime: new Date("2023-03-12T00:00:00Z"),
-					endTime: new Date("2023-03-12T01:00:00Z"),
-					repeatRule: createRepeatRule({
-						frequency: RepeatPeriod.DAILY,
-						endType: EndType.Never,
-						excludedDates: [createDateWrapper({ date: new Date("2023-03-13T00:00:00Z") })],
-					}),
-				}),
-			})
-			// @ts-ignore
-			const mock: EntityRestClientMock = viewModel.entityClient._target as EntityRestClientMock
-			// @ts-ignore
-			mock.addListInstances(viewModel.existingEvent!)
-
-			await viewModel.excludeThisOccurrence()
-
-			// @ts-ignore
-			o(viewModel.calendarModel.updateEvent.calls[0].args[0]?.repeatRule.excludedDates).deepEquals([
-				createDateWrapper({ date: new Date("2023-03-12T00:00:00Z") }),
-				createDateWrapper({ date: new Date("2023-03-13T00:00:00Z") }),
-			])
-		})
-		o("adding two exclusions in order sorts them", async function () {
-			const userController = makeUserController()
-			const calendars = new Map()
-			calendars.set("ownerGroup", {
-				groupRoot: null,
-				longEvents: new LazyLoaded(async () => []),
-				groupInfo: null,
-				group: null,
-				shared: false,
-			})
-			const viewModel = await init({
-				userController,
-				calendars,
-				existingEvent: createCalendarEvent({
-					_id: ["listId", "elementId"],
-					_ownerGroup: "ownerGroup",
-					startTime: new Date("2023-03-13T00:00:00Z"),
-					endTime: new Date("2023-03-13T01:00:00Z"),
-					repeatRule: createRepeatRule({
-						frequency: RepeatPeriod.DAILY,
-						endType: EndType.Never,
-						excludedDates: [createDateWrapper({ date: new Date("2023-03-12T00:00:00Z") })],
-					}),
-				}),
-			})
-			// @ts-ignore
-			const mock: EntityRestClientMock = viewModel.entityClient._target as EntityRestClientMock
-			// @ts-ignore
-			mock.addListInstances(viewModel.existingEvent!)
-
-			await viewModel.excludeThisOccurrence()
-			// @ts-ignore
-			o(viewModel.calendarModel.updateEvent.calls[0].args[0]?.repeatRule.excludedDates).deepEquals([
-				createDateWrapper({ date: new Date("2023-03-12T00:00:00Z") }),
-				createDateWrapper({ date: new Date("2023-03-13T00:00:00Z") }),
-			])
 		})
 	})
 })

@@ -1,19 +1,21 @@
 import { parseCalendarFile } from "../export/CalendarImporter"
 import type { CalendarEvent, CalendarEventAttendee, File as TutanotaFile, Mail } from "../../api/entities/tutanota/TypeRefs.js"
 import { locator } from "../../api/main/MainLocator"
-import { CalendarAttendeeStatus, CalendarMethod, getAsEnumValue } from "../../api/common/TutanotaConstants"
-import { assertNotNull, clone, filterInt, noOp, ofClass, Thunk } from "@tutao/tutanota-utils"
-import { findPrivateCalendar, getEventStart, getTimeZone } from "./CalendarUtils"
+import { CalendarAttendeeStatus, CalendarMethod, FeatureType, getAsEnumValue } from "../../api/common/TutanotaConstants"
+import { assertNotNull, clone, filterInt, lazy, noOp, ofClass } from "@tutao/tutanota-utils"
+import { findPrivateCalendar, getTimeZone } from "./CalendarUtils"
 import { calendarUpdateDistributor } from "./CalendarUpdateDistributor"
 import { Dialog } from "../../gui/base/Dialog"
 import { UserError } from "../../api/main/UserError"
 import { NoopProgressMonitor } from "../../api/common/utils/ProgressMonitor"
-import { CalendarEventViewModel } from "./CalendarEventViewModel"
 import { DataFile } from "../../api/common/DataFile"
 import { findAttendeeInAddresses } from "../../api/common/utils/CommonCalendarUtils.js"
-import { RecipientType } from "../../api/common/recipients/Recipient.js"
+import { Recipient } from "../../api/common/recipients/Recipient.js"
+import { CalendarEventEditMode, getEventType } from "../view/eventeditor/CalendarEventEditDialog.js"
+import { CalendarEventEditModels, EventType } from "../model/eventeditor/CalendarEventEditModel.js"
+import { isCustomizationEnabledForCustomer } from "../../api/common/utils/Utils.js"
 
-export type Guest = Pick<CalendarEventAttendee, "address" | "status"> & { type: RecipientType }
+export type Guest = Pick<CalendarEventAttendee, "status"> & Recipient & { status: CalendarAttendeeStatus }
 
 function getParsedEvent(fileData: DataFile):
 	| {
@@ -44,36 +46,36 @@ function getParsedEvent(fileData: DataFile):
 }
 
 export async function showEventDetails(event: CalendarEvent, eventBubbleRect: ClientRect, mail: Mail | null): Promise<void> {
-	const [latestEvent, { CalendarEventPopup }, { htmlSanitizer }] = await Promise.all([
+	const [latestEvent, { CalendarEventPopup }, { CalendarEventPopupViewModel }, { htmlSanitizer }] = await Promise.all([
 		getLatestEvent(event),
-		import("../view/CalendarEventPopup"),
+		import("../view/eventpopup/CalendarEventPopup.js"),
+		import("../view/eventpopup/CalendarEventPopupViewModel.js"),
 		import("../../misc/HtmlSanitizer"),
 	])
-	let viewModel: CalendarEventViewModel | null = null
-	let onEditEvent: Thunk = noOp
 
-	// Do not create calendar event view model for external users as external users cannot delete/edit a calendar event. They don't have a calendar.
-	if (locator.logins.getUserController().isInternalUser()) {
-		const calendarInfos = await locator.calendarModel.loadOrCreateCalendarInfo(new NoopProgressMonitor())
-		const mailboxDetails = await locator.mailModel.getUserMailboxDetails()
-		const mailboxProerties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
-		viewModel = await locator.calendarEventViewModel(
-			getEventStart(latestEvent, getTimeZone()),
-			calendarInfos,
-			mailboxDetails,
-			mailboxProerties,
-			latestEvent,
-			mail,
-			true,
-		)
-
-		onEditEvent = async () => {
-			const { showCalendarEventEditDialog } = await import("../view/eventeditor/CalendarEventEditDialog.js")
-			showCalendarEventEditDialog(latestEvent.startTime, calendarInfos, mailboxDetails, latestEvent, mail ?? undefined)
-		}
+	let eventType: EventType
+	let editModelsFactory: lazy<Promise<CalendarEventEditModels>>
+	let hasBusinessFeature: boolean
+	if (!locator.logins.getUserController().isInternalUser()) {
+		// external users cannot delete/edit events as they have no calendar.
+		eventType = EventType.EXTERNAL
+		editModelsFactory = () => new Promise(noOp)
+		hasBusinessFeature = false
+	} else {
+		const [calendarInfos, mailboxDetails, customer] = await Promise.all([
+			locator.calendarModel.loadOrCreateCalendarInfo(new NoopProgressMonitor()),
+			locator.mailModel.getUserMailboxDetails(),
+			locator.logins.getUserController().loadCustomer(),
+		])
+		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
+		const ownMailAddresses = mailboxProperties.mailAddressProperties.map(({ mailAddress }) => mailAddress)
+		eventType = getEventType(latestEvent, calendarInfos, ownMailAddresses, locator.logins.getUserController().user)
+		editModelsFactory = () => locator.calendarEventEditModels(CalendarEventEditMode.All, latestEvent, mailboxDetails, mailboxProperties)
+		hasBusinessFeature = isCustomizationEnabledForCustomer(customer, FeatureType.BusinessFeatureEnabled)
 	}
 
-	new CalendarEventPopup(latestEvent, eventBubbleRect, htmlSanitizer, onEditEvent, viewModel, latestEvent).show()
+	const viewModel = new CalendarEventPopupViewModel(latestEvent, locator.calendarModel, eventType, hasBusinessFeature, editModelsFactory)
+	new CalendarEventPopup(viewModel, eventBubbleRect, htmlSanitizer).show()
 }
 
 export async function getEventFromFile(file: TutanotaFile): Promise<CalendarEvent | null> {
@@ -122,9 +124,9 @@ export async function replyToEventInvitation(
 			return
 		}
 		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
-		const sendMailModel = await locator.sendMailModel(mailboxDetails, mailboxProperties)
+		const responseModel = await locator.sendMailModel(mailboxDetails, mailboxProperties)
 		return calendarUpdateDistributor
-			.sendResponse(eventClone, sendMailModel, foundAttendee.address.address, previousMail, decision)
+			.sendResponse(eventClone, responseModel, previousMail)
 			.catch(ofClass(UserError, (e) => Dialog.message(() => e.message)))
 			.then(() => {
 				if (calendar) {

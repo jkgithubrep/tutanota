@@ -118,7 +118,7 @@ export class EventPreviewView implements Component<EventPreviewViewAttrs> {
 	 */
 	private renderAttendanceSection(attendees: Array<CalendarEventAttendee>, setParticipation?: (status: CalendarAttendeeStatus) => void): Children {
 		if (attendees.length === 0 || setParticipation == null) return null
-		return m(".flex.pb-s", [this.renderSectionIndicator(BootIcons.Contacts), renderReplyButtons((status) => {}, CalendarAttendeeStatus.DECLINED)])
+		return m(".flex.pb-s", [this.renderSectionIndicator(BootIcons.Contacts), renderReplyButtons(setParticipation, CalendarAttendeeStatus.DECLINED)])
 	}
 
 	private renderAttendee(attendee: CalendarEventAttendee): Children {

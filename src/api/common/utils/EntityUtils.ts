@@ -60,7 +60,7 @@ export const POST_MULTIPLE_LIMIT = 100
  */
 export type Stripped<T extends Partial<SomeEntity>> = Omit<
 	T,
-	"_id" | "_ownerGroup" | "_ownerEncSessionKey" | "_permissions" | "_errors" | `_finalEncrypted${string}` | `_defaultEncrypted${string}`
+	"_id" | "_ownerGroup" | "_ownerEncSessionKey" | "_permissions" | "_errors" | "_format" | "_type" | `_finalEncrypted${string}` | `_defaultEncrypted${string}`
 >
 
 /**

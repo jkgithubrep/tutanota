@@ -6,12 +6,12 @@ import { ViewSlider } from "../../gui/nav/ViewSlider.js"
 import type { Shortcut } from "../../misc/KeyManager"
 import { keyManager } from "../../misc/KeyManager"
 import { Icons } from "../../gui/base/icons/Icons"
-import { downcast, getStartOfDay, LazyLoaded, memoized, ofClass } from "@tutao/tutanota-utils"
+import { downcast, getStartOfDay, memoized, ofClass } from "@tutao/tutanota-utils"
 import type { CalendarEvent, GroupSettings, UserSettingsGroupRoot } from "../../api/entities/tutanota/TypeRefs.js"
 import { CalendarEventTypeRef, createGroupSettings } from "../../api/entities/tutanota/TypeRefs.js"
-import { defaultCalendarColor, GroupType, Keys, ShareCapability, TimeFormat } from "../../api/common/TutanotaConstants"
+import { defaultCalendarColor, FeatureType, GroupType, Keys, ShareCapability, TimeFormat } from "../../api/common/TutanotaConstants"
 import { locator } from "../../api/main/MainLocator"
-import { getEventStart, getTimeZone, shouldDefaultToAmPmTimeFormat } from "../date/CalendarUtils"
+import { getTimeZone, shouldDefaultToAmPmTimeFormat } from "../date/CalendarUtils"
 import { Button, ButtonColor, ButtonType } from "../../gui/base/Button.js"
 import { NavButton, NavButtonColor } from "../../gui/base/NavButton.js"
 import { CalendarMonthView } from "./CalendarMonthView"
@@ -28,7 +28,6 @@ import { px, size } from "../../gui/size"
 import { FolderColumnView } from "../../gui/FolderColumnView.js"
 import { deviceConfig } from "../../misc/DeviceConfig"
 import { exportCalendar, showCalendarImportDialog } from "../export/CalendarImporterDialog"
-import { CalendarEventViewModel } from "../date/CalendarEventViewModel"
 import { showNotAvailableForFreeDialog } from "../../misc/SubscriptionDialogs"
 import { getSharedGroupName, hasCapabilityOnGroup, loadGroupMembers } from "../../sharing/GroupUtils"
 import { showGroupSharingDialog } from "../../sharing/view/GroupSharingDialog"
@@ -38,8 +37,8 @@ import type { HtmlSanitizer } from "../../misc/HtmlSanitizer"
 import { ProgrammingError } from "../../api/common/error/ProgrammingError"
 import { calendarNavConfiguration } from "./CalendarGuiUtils"
 import { CalendarViewModel, CalendarViewType, CalendarViewTypeByValue, MouseOrPointerEvent } from "./CalendarViewModel"
-import { showCalendarEventEditDialog } from "./eventeditor/CalendarEventEditDialog.js"
-import { CalendarEventPopup } from "./CalendarEventPopup"
+import { CalendarEventEditMode, getEventType, showNewCalendarEventEditDialog } from "./eventeditor/CalendarEventEditDialog.js"
+import { CalendarEventPopup } from "./eventpopup/CalendarEventPopup.js"
 import { showProgressDialog } from "../../gui/dialogs/ProgressDialog"
 import type { CalendarInfo } from "../model/CalendarModel"
 import { client } from "../../misc/ClientDetector"
@@ -51,6 +50,11 @@ import { BottomNav } from "../../gui/nav/BottomNav.js"
 import { DrawerMenuAttrs } from "../../gui/nav/DrawerMenu.js"
 import { BaseTopLevelView } from "../../gui/BaseTopLevelView.js"
 import { TopLevelAttrs, TopLevelView } from "../../TopLevelView.js"
+import { getEnabledMailAddressesWithUser } from "../../mail/model/MailUtils.js"
+import { CalendarEventPopupViewModel } from "./eventpopup/CalendarEventPopupViewModel.js"
+import { isCustomizationEnabledForCustomer } from "../../api/common/utils/Utils.js"
+import { EntityClient } from "../../api/common/EntityClient.js"
+import { getEventWithDefaultTimes } from "../../api/common/utils/CommonCalendarUtils.js"
 import { BackgroundColumnLayout } from "../../gui/BackgroundColumnLayout.js"
 import { theme } from "../../gui/theme.js"
 import { CalendarMobileHeader } from "./CalendarMobileHeader.js"
@@ -363,7 +367,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 		]
 	}
 
-	_createNewEventDialog(date: Date | null = null) {
+	async _createNewEventDialog(date: Date | null = null): Promise<void> {
 		let dateToUse: Date
 		if (date != null) {
 			dateToUse = date
@@ -376,29 +380,18 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 		let calendarInfos = this.viewModel.getCalendarInfosCreateIfNeeded()
 
 		if (calendarInfos instanceof Promise) {
-			calendarInfos = showProgressDialog("pleaseWait_msg", calendarInfos)
+			await showProgressDialog("pleaseWait_msg", calendarInfos)
 		}
 
-		Promise.all([calendarInfos, locator.mailModel.getUserMailboxDetails()]).then(([calendars, mailboxDetails]) =>
-			showCalendarEventEditDialog(dateToUse, calendars, mailboxDetails),
+		const mailboxDetails = await locator.mailModel.getUserMailboxDetails()
+		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
+		const editModels = await locator.calendarEventEditModels(
+			CalendarEventEditMode.All,
+			getEventWithDefaultTimes(dateToUse),
+			mailboxDetails,
+			mailboxProperties,
 		)
-	}
-
-	_editEventDialog(event: CalendarEvent) {
-		Promise.all([this.viewModel.calendarInfos.getAsync(), locator.mailModel.getUserMailboxDetails()]).then(([calendarInfos, mailboxDetails]) => {
-			let p = Promise.resolve(event)
-
-			if (event.repeatRule) {
-				// in case of a repeat rule we want to show the start event for now to indicate that we edit all events.
-				p = locator.entityClient.load(CalendarEventTypeRef, event._id)
-			}
-
-			p.then((e) => showCalendarEventEditDialog(getEventStart(e, getTimeZone()), calendarInfos, mailboxDetails, e)).catch(
-				ofClass(NotFoundError, () => {
-					console.log("calendar event not found when clicking on the event")
-				}),
-			)
-		})
+		await showNewCalendarEventEditDialog(editModels, mailboxDetails)
 	}
 
 	_viewPeriod(viewType: CalendarViewType, next: boolean) {
@@ -777,13 +770,7 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 		)
 	}
 
-	async _createCalendarEventViewModel(event: CalendarEvent, calendarInfo: LazyLoaded<Map<Id, CalendarInfo>>): Promise<CalendarEventViewModel> {
-		const [mailboxDetails, calendarInfos] = await Promise.all([locator.mailModel.getUserMailboxDetails(), calendarInfo.getAsync()])
-		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
-		return locator.calendarEventViewModel(getEventStart(event, getTimeZone()), calendarInfos, mailboxDetails, mailboxProperties, event, null, false)
-	}
-
-	async _onEventSelected(calendarEvent: CalendarEvent, domEvent: MouseOrPointerEvent, htmlSanitizerPromise: Promise<HtmlSanitizer>) {
+	async _onEventSelected(selectedEvent: CalendarEvent, domEvent: MouseOrPointerEvent, htmlSanitizerPromise: Promise<HtmlSanitizer>) {
 		const domTarget = domEvent.currentTarget
 
 		if (domTarget == null || !(domTarget instanceof HTMLElement)) {
@@ -792,11 +779,12 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 
 		const x = domEvent.clientX
 		const y = domEvent.clientY
-		const [viewModel, htmlSanitizer, firstOccurrence] = await Promise.all([
-			this._createCalendarEventViewModel(calendarEvent, this.viewModel.calendarInfos),
+		const [calendars, mailboxDetails, htmlSanitizer] = await Promise.all([
+			this.viewModel.calendarInfos.getAsync(),
+			locator.mailModel.getUserMailboxDetails(),
 			htmlSanitizerPromise,
-			calendarEvent.repeatRule ? await locator.entityClient.load(CalendarEventTypeRef, calendarEvent._id) : calendarEvent,
 		])
+		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
 		// We want the popup to show at the users mouse
 		const rect = {
 			bottom: y,
@@ -806,6 +794,27 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 			left: x,
 			right: x,
 		}
-		new CalendarEventPopup(calendarEvent, rect, htmlSanitizer, () => this._editEventDialog(calendarEvent), viewModel, firstOccurrence).show()
+		const userController = locator.logins.getUserController()
+		const customer = await userController.loadCustomer()
+		const ownMailAddresses = getEnabledMailAddressesWithUser(mailboxDetails, userController.userGroupInfo)
+		const eventType = getEventType(selectedEvent, calendars, ownMailAddresses, userController.user)
+		// FIXME
+		const previousMail = null
+		const hasBusinessFeature = isCustomizationEnabledForCustomer(customer, FeatureType.BusinessFeatureEnabled)
+		const popupModel = new CalendarEventPopupViewModel(selectedEvent, locator.calendarModel, eventType, hasBusinessFeature, (mode: CalendarEventEditMode) =>
+			locator.calendarEventEditModels(mode, selectedEvent, mailboxDetails, mailboxProperties),
+		)
+		new CalendarEventPopup(popupModel, rect, htmlSanitizer).show()
 	}
+}
+
+/**
+ * get the "primary" event of a series - the one that contains the repeat rule and is not a repeated or a rescheduled instance.
+ * @param calendarEvent
+ * @param entityClient
+ */
+export async function resolveCalendarEventProgenitor(calendarEvent: CalendarEvent, entityClient: EntityClient = locator.entityClient): Promise<CalendarEvent> {
+	// FIXME: we need to go via the index for rescheduled instances.
+	// FIXME: also, there might be multiple "splits" in the series wrt to a changing repeat rule...
+	return calendarEvent.repeatRule ? await entityClient.load(CalendarEventTypeRef, calendarEvent._id) : calendarEvent
 }

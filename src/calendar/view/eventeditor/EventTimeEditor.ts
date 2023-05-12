@@ -1,17 +1,16 @@
 import m, { Component, Vnode } from "mithril"
 import { DatePicker } from "../../../gui/date/DatePicker.js"
 import { TimePicker } from "../../../gui/TimePicker.js"
-import { renderTwoColumnsIfFits } from "./CalendarEventEditDialog.js"
-import { CalendarEventEditModel } from "../../date/CalendarEventEditModel.js"
 import { TimeFormat } from "../../../api/common/TutanotaConstants.js"
 import { Checkbox } from "../../../gui/base/Checkbox.js"
 import { lang } from "../../../misc/LanguageViewModel.js"
+import { CalendarEventWhenModel } from "../../model/eventeditor/CalendarEventWhenModel.js"
+import { renderTwoColumnsIfFits } from "./CalendarEventEditView.js"
 
 export type EventTimeEditorAttrs = {
-	disabled: boolean
 	startOfTheWeekOffset: number
 	timeFormat: TimeFormat
-	editModel: CalendarEventEditModel
+	editModel: CalendarEventWhenModel
 }
 
 /**
@@ -21,7 +20,7 @@ export type EventTimeEditorAttrs = {
 export class EventTimeEditor implements Component<EventTimeEditorAttrs> {
 	view(vnode: Vnode<EventTimeEditorAttrs>) {
 		const { attrs } = vnode
-		const { startOfTheWeekOffset, editModel, disabled, timeFormat } = attrs
+		const { startOfTheWeekOffset, editModel, timeFormat } = attrs
 
 		return [
 			renderTwoColumnsIfFits(
@@ -34,7 +33,7 @@ export class EventTimeEditor implements Component<EventTimeEditorAttrs> {
 							startOfTheWeekOffset,
 							label: "dateFrom_label",
 							nullSelectionText: "emptyString_msg",
-							disabled,
+							disabled: false,
 						}),
 					),
 					!editModel.isAllDay
@@ -44,7 +43,7 @@ export class EventTimeEditor implements Component<EventTimeEditorAttrs> {
 									time: editModel.startTime,
 									onTimeSelected: (time) => (editModel.startTime = time),
 									timeFormat,
-									disabled,
+									disabled: false,
 								}),
 						  )
 						: null,
@@ -58,7 +57,7 @@ export class EventTimeEditor implements Component<EventTimeEditorAttrs> {
 							startOfTheWeekOffset,
 							label: "dateTo_label",
 							nullSelectionText: "emptyString_msg",
-							disabled,
+							disabled: false,
 						}),
 					),
 					!editModel.isAllDay
@@ -68,7 +67,7 @@ export class EventTimeEditor implements Component<EventTimeEditorAttrs> {
 									time: editModel.endTime,
 									onTimeSelected: (time) => (editModel.endTime = time),
 									timeFormat,
-									disabled,
+									disabled: false,
 								}),
 						  )
 						: null,
@@ -78,7 +77,7 @@ export class EventTimeEditor implements Component<EventTimeEditorAttrs> {
 				m(Checkbox, {
 					checked: editModel.isAllDay,
 					onChecked: (value) => (editModel.isAllDay = value),
-					disabled,
+					disabled: false,
 					label: () => lang.get("allDay_label"),
 				}),
 				m(".flex-grow"),

@@ -2,6 +2,7 @@ import { DAY_IN_MILLIS } from "@tutao/tutanota-utils"
 import type { CalendarEvent } from "../../entities/tutanota/TypeRefs.js"
 import { EncryptedMailAddress } from "../../entities/tutanota/TypeRefs.js"
 import { stringToCustomId } from "./EntityUtils"
+import { getNextHalfHour } from "../../../calendar/date/CalendarUtils.js"
 
 export type CalendarEventTimes = Pick<CalendarEvent, "startTime" | "endTime">
 
@@ -115,4 +116,17 @@ export function findAttendeeInAddresses<T extends { address: EncryptedMailAddres
 export function findRecipientWithAddress<T extends { address: string }>(recipients: ReadonlyArray<T>, address: string): T | null {
 	const cleanAddress = cleanMailAddress(address)
 	return recipients.find((r) => cleanMailAddress(r.address) === cleanAddress) ?? null
+}
+
+/**
+ * get a partial calendar event with start time set to the passed value
+ * (year, day, hours and minutes. seconds and milliseconds are zeroed.)
+ * and an end time 30 minutes later than that.
+ * @param startDate the start time to use for the event (defaults to the next full half hour)
+ */
+export function getEventWithDefaultTimes(startDate: Date = getNextHalfHour()): CalendarEventTimes {
+	return {
+		startTime: new Date(startDate),
+		endTime: new Date(startDate.setMinutes(startDate.getMinutes() + 30)),
+	}
 }

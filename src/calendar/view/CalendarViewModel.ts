@@ -35,13 +35,13 @@ import {
 	getEventStart,
 	getMonth,
 	getTimeZone,
+	incrementSequence,
 	isEventBetweenDays,
 	isSameEvent,
 } from "../date/CalendarUtils"
 import { DateTime } from "luxon"
 import { geEventElementMaxId, getEventElementMinId, isAllDayEvent } from "../../api/common/utils/CommonCalendarUtils"
-import type { EventCreateResult } from "../date/CalendarEventViewModel"
-import { CalendarEventViewModel } from "../date/CalendarEventViewModel"
+import { EventSaveResult } from "../model/eventeditor/CalendarEventSaveModel.js"
 import { askIfShouldSendCalendarUpdatesToAttendees } from "./CalendarGuiUtils"
 import { ReceivedGroupInvitationsModel } from "../../sharing/model/ReceivedGroupInvitationsModel"
 import type { CalendarInfo, CalendarModel } from "../model/CalendarModel"
@@ -52,6 +52,11 @@ import { ProgressTracker } from "../../api/main/ProgressTracker"
 import { DeviceConfig } from "../../misc/DeviceConfig"
 import type { EventDragHandlerCallbacks } from "./EventDragHandler"
 import { locator } from "../../api/main/MainLocator.js"
+import { assembleCalendarEventEditResult, assignEventIdentity, CalendarEventEditModels, EventType } from "../model/eventeditor/CalendarEventEditModel.js"
+import { ProgrammingError } from "../../api/common/error/ProgrammingError.js"
+import { getNonOrganizerAttendees } from "./eventpopup/CalendarEventPopup.js"
+import { CalendarEventEditMode } from "./eventeditor/CalendarEventEditDialog.js"
+import { resolveCalendarEventProgenitor } from "./CalendarView.js"
 
 export type EventsOnDays = {
 	days: Array<Date>
@@ -80,7 +85,7 @@ export type MouseOrPointerEvent = MouseEvent | PointerEvent
 export type CalendarEventBubbleClickHandler = (arg0: CalendarEvent, arg1: MouseOrPointerEvent) => unknown
 type EventsForDays = Map<number, Array<CalendarEvent>>
 export const LIMIT_PAST_EVENTS_YEARS = 100
-export type CreateCalendarEventViewModelFunction = (event: CalendarEvent, calendarInfos: LazyLoaded<Map<Id, CalendarInfo>>) => Promise<CalendarEventViewModel>
+export type CalendarEventEditModelsFactory = (event: CalendarEvent) => Promise<CalendarEventEditModels>
 
 export class CalendarViewModel implements EventDragHandlerCallbacks {
 	// Should not be changed directly but only through the URL
@@ -93,7 +98,6 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 
 	_hiddenCalendars: Set<Id>
 	readonly _calendarInvitations: ReceivedGroupInvitationsModel
-	_createCalendarEventViewModelCallback: (event: CalendarEvent, calendarInfos: LazyLoaded<Map<Id, CalendarInfo>>) => Promise<CalendarEventViewModel>
 	readonly _calendarModel: CalendarModel
 	readonly _entityClient: EntityClient
 	// Events that have been dropped but still need to be rendered as temporary while waiting for entity updates.
@@ -105,7 +109,7 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 
 	constructor(
 		private readonly logins: LoginController,
-		createCalendarEventViewModelCallback: CreateCalendarEventViewModelFunction,
+		private readonly createCalendarEventEditModelCallback: CalendarEventEditModelsFactory,
 		calendarModel: CalendarModel,
 		entityClient: EntityClient,
 		eventController: EventController,
@@ -115,7 +119,6 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 	) {
 		this._calendarModel = calendarModel
 		this._entityClient = entityClient
-		this._createCalendarEventViewModelCallback = createCalendarEventViewModelCallback
 		this._transientEvents = []
 
 		const userId = logins.getUserController().user._id
@@ -220,10 +223,10 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 
 			this._addTransientEvent(eventClone)
 
-			const firstOccurrence = originalEvent.repeatRule ? await this._entityClient.load(CalendarEventTypeRef, originalEvent._id) : originalEvent
+			const progenitor = await resolveCalendarEventProgenitor(originalEvent, this._entityClient)
 
 			try {
-				const didUpdate = await this._moveEvent(firstOccurrence, timeToMoveBy)
+				const didUpdate = await this.moveEvent(progenitor, timeToMoveBy)
 
 				if (!didUpdate) {
 					this._removeTransientEvent(eventClone)
@@ -347,17 +350,35 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 	 * move an event to a new start time
 	 * @param event the actually dragged event (may be a repeated instance)
 	 * @param diff the amount of milliseconds to shift the event by
+	 * @param mode which parts of the series should be rescheduled?
 	 */
-	async _moveEvent(event: CalendarEvent, diff: number): Promise<EventCreateResult> {
-		const viewModel: CalendarEventViewModel = await this._createCalendarEventViewModelCallback(event, this.calendarInfos)
-		viewModel.rescheduleEvent(diff)
+	private async moveEvent(event: CalendarEvent, diff: number, mode: CalendarEventEditMode = CalendarEventEditMode.All): Promise<EventSaveResult> {
+		if (event.uid == null) {
+			throw new ProgrammingError("called moveEvent for an event without uid")
+		}
+
+		if (mode !== CalendarEventEditMode.All) {
+			throw new ProgrammingError("single-instance-rescheduling is not implemented.")
+		}
+
+		const editModels = await this.createCalendarEventEditModelCallback(event)
+		editModels.whenModel.rescheduleEvent(diff)
+		const { eventValues: editedEventValues, alarms, sendModels } = assembleCalendarEventEditResult(editModels)
+
+		const mayIncrement = editModels.saveModel.eventType === EventType.OWN || editModels.saveModel.eventType === EventType.SHARED_RW
+		const editedEvent = assignEventIdentity(editedEventValues, { uid: event.uid, sequence: incrementSequence(event.sequence, mayIncrement) })
+
+		if (getNonOrganizerAttendees(event).length > 0) {
+			const response = await askIfShouldSendCalendarUpdatesToAttendees()
+			if (response === "yes") {
+				editModels.saveModel.shouldSendUpdates = true
+			} else if (response === "cancel") {
+				return EventSaveResult.Failed
+			}
+		}
+
 		// Errors are handled in the individual views
-		return viewModel.saveAndSend({
-			askForUpdates: askIfShouldSendCalendarUpdatesToAttendees,
-			askInsecurePassword: async () => true,
-			showProgress: noOp,
-			askEditType: async () => "all",
-		})
+		return await editModels.saveModel.updateExistingEvent(editedEvent, alarms, sendModels)
 	}
 
 	_addOrUpdateEvent(calendarInfo: CalendarInfo | null, event: CalendarEvent) {

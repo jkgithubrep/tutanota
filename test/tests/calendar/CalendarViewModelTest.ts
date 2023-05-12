@@ -10,7 +10,7 @@ import { addDaysForEvent, getTimeZone } from "../../../src/calendar/date/Calenda
 import type { CalendarInfo, CalendarModel } from "../../../src/calendar/model/CalendarModel.js"
 import type { CreateCalendarEventViewModelFunction } from "../../../src/calendar/view/CalendarViewModel.js"
 import { CalendarViewModel } from "../../../src/calendar/view/CalendarViewModel.js"
-import { CalendarEventViewModel } from "../../../src/calendar/date/CalendarEventViewModel.js"
+import { CalendarEventSaveModel } from "../../../src/calendar/model/eventeditor/CalendarEventSaveModel.js"
 import { EntityClient } from "../../../src/api/common/EntityClient.js"
 import type { EntityUpdateData } from "../../../src/api/main/EventController.js"
 import { EventController } from "../../../src/api/main/EventController.js"
@@ -412,7 +412,7 @@ function makeTestEvent(): CalendarEvent {
 	})
 }
 
-async function makeCalendarEventViewModel(existingEvent: CalendarEvent, calendars: LazyLoaded<Map<Id, CalendarInfo>>): Promise<CalendarEventViewModel> {
+async function makeCalendarEventViewModel(existingEvent: CalendarEvent, calendars: LazyLoaded<Map<Id, CalendarInfo>>): Promise<CalendarEventSaveModel> {
 	return downcast({
 		saveAndSend: saveAndSendMock,
 		rescheduleEvent: rescheduleEventMock,
@@ -422,7 +422,7 @@ async function makeCalendarEventViewModel(existingEvent: CalendarEvent, calendar
 async function makeCalendarEventViewModelThatFailsSaving(
 	existingEvent: CalendarEvent,
 	calendars: LazyLoaded<Map<Id, CalendarInfo>>,
-): Promise<CalendarEventViewModel> {
+): Promise<CalendarEventSaveModel> {
 	return downcast({
 		saveAndSend: () => Promise.resolve(false),
 		rescheduleEvent: () => Promise.resolve(),
@@ -432,7 +432,7 @@ async function makeCalendarEventViewModelThatFailsSaving(
 async function makeCalendarEventViewModelThatThrowsOnSaving(
 	existingEvent: CalendarEvent,
 	calendars: LazyLoaded<Map<Id, CalendarInfo>>,
-): Promise<CalendarEventViewModel> {
+): Promise<CalendarEventSaveModel> {
 	return downcast({
 		saveAndSend: () => Promise.reject(new Error("whoopsie")),
 		rescheduleEvent: () => Promise.resolve(),

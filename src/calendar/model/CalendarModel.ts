@@ -76,14 +76,14 @@ export class CalendarModel {
 		eventController.addEntityListener((updates) => this.entityEventsReceived(updates))
 	}
 
-	async createEvent(event: CalendarEvent, alarmInfos: Array<AlarmInfo>, zone: string, groupRoot: CalendarGroupRoot): Promise<void> {
+	async createEvent(event: CalendarEvent, alarmInfos: ReadonlyArray<AlarmInfo>, zone: string, groupRoot: CalendarGroupRoot): Promise<void> {
 		await this.doCreate(event, zone, groupRoot, alarmInfos)
 	}
 
 	/** Update existing event when time did not change */
 	async updateEvent(
 		newEvent: CalendarEvent,
-		newAlarms: Array<AlarmInfo>,
+		newAlarms: ReadonlyArray<AlarmInfo>,
 		zone: string,
 		groupRoot: CalendarGroupRoot,
 		existingEvent: CalendarEvent,
@@ -188,7 +188,7 @@ export class CalendarModel {
 		event: CalendarEvent,
 		zone: string,
 		groupRoot: CalendarGroupRoot,
-		alarmInfos: Array<AlarmInfo>,
+		alarmInfos: ReadonlyArray<AlarmInfo>,
 		existingEvent?: CalendarEvent,
 	): Promise<void> {
 		// If the event was copied it might still carry some fields for re-encryption. We can't reuse them.
