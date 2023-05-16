@@ -17,21 +17,15 @@ import { createAlarmIntervalItems } from "../../date/CalendarUtils.js"
 import { Icons } from "../../../gui/base/icons/Icons.js"
 import { IconButton } from "../../../gui/base/IconButton.js"
 import { ButtonSize } from "../../../gui/base/ButtonSize.js"
-import { CalendarEventSaveModel } from "../../model/eventeditor/CalendarEventSaveModel.js"
 import { HtmlEditor } from "../../../gui/editor/HtmlEditor.js"
 import { attachDropdown } from "../../../gui/base/Dropdown.js"
-import { MailboxDetail } from "../../../mail/model/MailModel.js"
 import { client } from "../../../misc/ClientDetector.js"
 
 export type CalendarEventEditViewAttrs = {
 	editModels: CalendarEventEditModels
-	saveModel: CalendarEventSaveModel
-	// FIXME: i don't think we need that here, can probably use the one on saveModel.
-	mailboxDetail: MailboxDetail
 	groupColors: Map<Id, string>
 	recipientsSearch: RecipientsSearchModel
 	descriptionEditor: HtmlEditor
-	eventType: EventType
 	startOfTheWeekOffset: number
 	timeFormat: TimeFormat
 }
@@ -108,7 +102,7 @@ export class CalendarEventEditView implements Component<CalendarEventEditViewAtt
 	}
 
 	private renderChangesMessage(vnode: Vnode<CalendarEventEditViewAttrs>): Children {
-		return vnode.attrs.eventType === EventType.INVITE ? m(".mt.mb-s", lang.get("eventCopy_msg")) : null
+		return vnode.attrs.editModels.saveModel.eventType === EventType.INVITE ? m(".mt.mb-s", lang.get("eventCopy_msg")) : null
 	}
 
 	private renderAttendees(vnode: Vnode<CalendarEventEditViewAttrs>): Children {
@@ -119,12 +113,10 @@ export class CalendarEventEditView implements Component<CalendarEventEditViewAtt
 				{ expanded: this.attendeesExpanded },
 				m(AttendeeListEditor, {
 					editModel: vnode.attrs.editModels.whoModel,
-					saveModel: vnode.attrs.saveModel,
+					saveModel: vnode.attrs.editModels.saveModel,
 					recipientsSearch: this.recipientsSearch,
 					logins: locator.logins,
-					mailboxDetail: vnode.attrs.mailboxDetail,
 					disabled: false,
-					eventType: EventType.OWN,
 					isSharedCalendar: false,
 				} satisfies AttendeeListEditorAttrs),
 			),
@@ -132,8 +124,8 @@ export class CalendarEventEditView implements Component<CalendarEventEditViewAtt
 	}
 
 	private renderCalendarPicker(vnode: Vnode<CalendarEventEditViewAttrs>): Children {
-		const { saveModel, editModels } = vnode.attrs
-		const availableCalendars = saveModel.getAvailableCalendars(editModels.whoModel.guests.length > 0)
+		const { editModels } = vnode.attrs
+		const availableCalendars = editModels.whoModel.getAvailableCalendars()
 		return m(
 			".flex-half.pr-s",
 			availableCalendars.length
@@ -145,11 +137,11 @@ export class CalendarEventEditView implements Component<CalendarEventEditViewAtt
 								value: calendarInfo,
 							}
 						}),
-						selectedValue: saveModel.selectedCalendar,
-						selectionChangedHandler: (v) => (saveModel.selectedCalendar = v),
+						selectedValue: editModels.whoModel.selectedCalendar,
+						selectionChangedHandler: (v) => (editModels.whoModel.selectedCalendar = v),
 						icon: BootIcons.Expand,
 						disabled: false,
-						helpLabel: () => this.renderCalendarColor(saveModel.selectedCalendar, vnode.attrs.groupColors),
+						helpLabel: () => this.renderCalendarColor(editModels.whoModel.selectedCalendar, vnode.attrs.groupColors),
 				  } as DropDownSelectorAttrs<CalendarInfo>)
 				: null,
 		)

@@ -2,17 +2,23 @@ import o from "ospec"
 import {
 	CalendarEvent,
 	createCalendarEventAttendee,
+	createCalendarGroupRoot,
 	createContact,
 	createContactAddress,
 	createEncryptedMailAddress,
 	EncryptedMailAddress,
 } from "../../../../src/api/entities/tutanota/TypeRefs.js"
-import { noOp } from "@tutao/tutanota-utils"
+import { LazyLoaded } from "@tutao/tutanota-utils"
 import { CalendarEventWhoModel } from "../../../../src/calendar/model/eventeditor/CalendarEventWhoModel.js"
 import { matchers, object, when } from "testdouble"
 import { RecipientsModel } from "../../../../src/api/main/RecipientsModel.js"
 import { Recipient, RecipientType } from "../../../../src/api/common/recipients/Recipient.js"
 import { CalendarAttendeeStatus, ContactAddressType } from "../../../../src/api/common/TutanotaConstants.js"
+import { EventType } from "../../../../src/calendar/model/eventeditor/CalendarEventEditModel.js"
+import { CalendarInfo } from "../../../../src/calendar/model/CalendarModel.js"
+import { createGroup, createGroupInfo } from "../../../../src/api/entities/sys/TypeRefs.js"
+import { SendMailModel } from "../../../../src/mail/editor/SendMailModel.js"
+import { UserController } from "../../../../src/api/main/UserController.js"
 
 o.spec("CalendarEventWhoModel", function () {
 	const ownerAddress = createEncryptedMailAddress({
@@ -74,11 +80,38 @@ o.spec("CalendarEventWhoModel", function () {
 		}),
 	}
 
+	const calendars: Map<Id, CalendarInfo> = new Map()
+
+	calendars.set("ownCalendar", {
+		groupRoot: createCalendarGroupRoot({}),
+		shared: false,
+		longEvents: new LazyLoaded(() => Promise.resolve([])),
+		groupInfo: createGroupInfo({}),
+		group: createGroup({
+			_id: "ownCalendar",
+		}),
+	})
+
+	calendars.set("sharedCalendar", {
+		groupRoot: createCalendarGroupRoot({}),
+		shared: true,
+		longEvents: new LazyLoaded(() => Promise.resolve([])),
+		groupInfo: createGroupInfo({}),
+		group: createGroup({
+			_id: "sharedCalendar",
+		}),
+	})
+
 	const ownAddresses: ReadonlyArray<EncryptedMailAddress> = [ownerAddress, ownerAlias]
+	const passwordStrengthModel = () => 1
 
 	let recipients: RecipientsModel
+	let sendMailModel: SendMailModel
+	let userController: UserController
 
 	o.beforeEach(() => {
+		userController = object()
+		sendMailModel = object()
 		recipients = object()
 		const setupRecipient = (recipient: Recipient) => {
 			const sameAddressMatcher = matchers.argThat((p) => p.address === recipient.address)
@@ -92,8 +125,30 @@ o.spec("CalendarEventWhoModel", function () {
 		setupRecipient(otherRecipient2)
 	})
 
-	const getNewModel = (initialValues: Partial<CalendarEvent>) => new CalendarEventWhoModel(initialValues, true, ownAddresses, recipients, noOp)
-	const getOldModel = (initialValues: Partial<CalendarEvent>) => new CalendarEventWhoModel(initialValues, false, ownAddresses, recipients, noOp)
+	const getNewModel = (initialValues: Partial<CalendarEvent>) =>
+		new CalendarEventWhoModel(
+			initialValues,
+			EventType.OWN,
+			calendars,
+			userController,
+			true,
+			ownAddresses,
+			recipients,
+			passwordStrengthModel,
+			() => sendMailModel,
+		)
+	const getOldModel = (initialValues: Partial<CalendarEvent>) =>
+		new CalendarEventWhoModel(
+			initialValues,
+			EventType.OWN,
+			calendars,
+			userController,
+			false,
+			ownAddresses,
+			recipients,
+			passwordStrengthModel,
+			() => sendMailModel,
+		)
 
 	o("adding another alias on your own event replaces the old attendee and updates the organizer", async function () {
 		const model = getNewModel({
@@ -114,11 +169,10 @@ o.spec("CalendarEventWhoModel", function () {
 		])("the single non-organizer guest is in guests array")
 		o(model.ownGuest).deepEquals(model.organizer)("the own guest is the organizer")
 		const result = model.result
-		o(result.attendeesToInvite).deepEquals([
-			createCalendarEventAttendee({
-				address: otherAddress,
-			}),
-		])("on a new model, everyone but the organizer needs to be invited, even if added during initialization")
+		o(result.inviteModel).notEquals(null)("on a new model, everyone but the organizer needs to be invited, even if added during initialization")
+		o(result.updateModel).equals(null)
+		o(result.cancelModel).equals(null)
+		o(result.responseModel).equals(null)
 		o(result.attendees).deepEquals([
 			createCalendarEventAttendee({ address: ownerAlias, status: CalendarAttendeeStatus.ACCEPTED }),
 			createCalendarEventAttendee({ address: otherAddress, status: CalendarAttendeeStatus.ADDED }),
@@ -234,7 +288,7 @@ o.spec("CalendarEventWhoModel", function () {
 				contact: null,
 			},
 		])
-		o(model.getPresharedPassword(otherAddress.address)).equals("")
+		o(model.getPresharedPassword(otherAddress.address)).deepEquals({ password: "", strength: 0 })("password is not set")
 		await model.recipientsSettled
 		o(model.guests).deepEquals([
 			{
@@ -245,9 +299,8 @@ o.spec("CalendarEventWhoModel", function () {
 				contact: otherRecipient.contact,
 			},
 		])
-		o(model.getPresharedPassword(otherAddress.address)).equals("otherPassword")
-		const { presharedPasswords, attendees } = model.result
-		o(presharedPasswords?.get(otherAddress.address)).equals("otherPassword")
+		o(model.getPresharedPassword(otherAddress.address)).deepEquals({ password: "otherPassword", strength: 1 })
+		const { attendees } = model.result
 		o(attendees).deepEquals([
 			createCalendarEventAttendee({
 				address: ownerAddress,

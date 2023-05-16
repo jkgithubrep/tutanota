@@ -118,7 +118,7 @@ export function getMonth(date: Date, zone: string): CalendarMonthTimeRange {
 }
 
 /**
- * Provides a date representing the beginning of the given date in local time.
+ * Provides a date/timestamp representing the beginning of the given day in local time.
  */
 export function getStartOfDayWithZone(date: Date, zone: string): Date {
 	return DateTime.fromJSDate(date, {
@@ -266,14 +266,6 @@ export function incrementByRepeatPeriod(date: Date, repeatPeriod: RepeatPeriod, 
 
 		default:
 			throw new Error("Unknown repeat period")
-	}
-}
-
-export function getEventStartByTimes(startTime: Date, endTime: Date, timeZone: string): Date {
-	if (isAllDayEventByTimes(startTime, endTime)) {
-		return getAllDayDateForTimezone(startTime, timeZone)
-	} else {
-		return startTime
 	}
 }
 
@@ -505,18 +497,21 @@ export function expandEvent(ev: CalendarEvent, columnIndex: number, columns: Arr
 }
 
 /**
+ * difference in whole 24-hour-intervals between two dates, not anticommutative.
  * Result is positive or 0 if b > a, result is negative or 0 otherwise
  */
-export function getDiffInDays(a: Date, b: Date): number {
-	// discard the time and time-zone information
+export function getDiffIn24hIntervals(a: Date, b: Date): number {
 	return Math.floor(DateTime.fromJSDate(b).diff(DateTime.fromJSDate(a), "day").days)
 }
 
 /**
- * Result is positive or 0 if b > a, result is negative or 0 otherwise
+ * difference in whole 60 minute intervals between two dates
+ * result is 0 if the diff is less than 60 minutes, otherwise
+ * positive if b is after a, otherwise negative.
+ *
+ * not anticommutative.
  */
-export function getDiffInHours(a: Date, b: Date): number {
-	// discard the time and time-zone information
+export function getDiffIn60mIntervals(a: Date, b: Date): number {
 	return Math.floor(DateTime.fromJSDate(b).diff(DateTime.fromJSDate(a), "hours").hours)
 }
 
@@ -588,6 +583,14 @@ export function getEventEnd(event: CalendarEventTimes, timeZone: string): Date {
 
 export function getEventStart({ startTime, endTime }: CalendarEventTimes, timeZone: string): Date {
 	return getEventStartByTimes(startTime, endTime, timeZone)
+}
+
+export function getEventStartByTimes(startTime: Date, endTime: Date, timeZone: string): Date {
+	if (isAllDayEventByTimes(startTime, endTime)) {
+		return getAllDayDateForTimezone(startTime, timeZone)
+	} else {
+		return startTime
+	}
 }
 
 export function getAllDayDateUTCFromZone(date: Date, timeZone: string): Date {
@@ -723,18 +726,25 @@ export function addDaysForEvent(events: Map<number, Array<CalendarEvent>>, event
 
 /**
  * Returns the end date of a repeating rule that can be used to display in the ui.
- * The actual end date that is stored on the repeat rule is always one day behind the displayed end date. The end date is always excluded
- * but to  display the end date we want to show the last date of the period which is included.
+ *
+ * The actual end date that is stored on the repeat rule is always one day behind the displayed end date:
+ * * for all-day events:
+ *   - displayed end date: 2023-05-18
+ *   - last occurrence can be: 2023-05-18
+ *   - exported end date: 2023-05-18
+ *   - actual timestamp on the entity: Midnight UTC 2023-05-19 (start of day)
+ * * normal events behave the same exept:
+ *   - actual timestamp on the entity is Midnight local timezone 2023-05-19 (start of day)
  * @returns {Date}
  */
-export function getRepeatEndTime(repeatRule: RepeatRule, isAllDay: boolean, timeZone: string): Date {
+export function getRepeatEndTimeForDisplay(repeatRule: RepeatRule, isAllDay: boolean, timeZone: string): Date {
 	if (repeatRule.endType !== EndType.UntilDate) {
 		throw new Error("Event has no repeat rule end type is not UntilDate: " + JSON.stringify(repeatRule))
 	}
 
-	const rawEndDate = new Date(Number(repeatRule.endValue))
+	const rawEndDate = new Date(filterInt(repeatRule.endValue ?? "0"))
 	const localDate = isAllDay ? getAllDayDateForTimezone(rawEndDate, timeZone) : rawEndDate
-	// Shown date is one day behind the actual end (for us it's excluded)
+	// Shown date is one day behind the actual end (but it is still excluded)
 	return incrementByRepeatPeriod(localDate, RepeatPeriod.DAILY, -1, timeZone)
 }
 
@@ -813,7 +823,7 @@ function* generateEventOccurrences(event: CalendarEvent, timeZone: string): Gene
 	}
 
 	let calcStartTime = eventStartTime
-	const calcDuration = allDay ? getDiffInDays(eventStartTime, eventEndTime) : eventEndTime.getTime() - eventStartTime.getTime()
+	const calcDuration = allDay ? getDiffIn24hIntervals(eventStartTime, eventEndTime) : eventEndTime.getTime() - eventStartTime.getTime()
 	let calcEndTime = eventEndTime
 	let iteration = 1
 
@@ -835,8 +845,7 @@ function* generateEventOccurrences(event: CalendarEvent, timeZone: string): Gene
  *
  * will compare exclusion time stamps with the exact date-time value of the occurrences startTime
  *
- * FIXME: this needs to take reschedulings into account.
- * @param event the calendar event to check
+ * @param event the calendar event to check. to get correct results, this must be the progenitor.
  */
 export function calendarEventHasMoreThanOneOccurrencesLeft(event: Readonly<CalendarEvent>): boolean {
 	if (event.repeatRule == null) {
@@ -1231,8 +1240,8 @@ export function getTimeTextFormatForLongEvent(ev: CalendarEvent, startDay: Date,
  */
 export function combineDateWithTime(date: Date, time: Time): Date {
 	const newDate = new Date(date)
-	newDate.setHours(time.hours)
-	newDate.setMinutes(time.minutes)
+	newDate.setHours(time.hour)
+	newDate.setMinutes(time.minute)
 	return newDate
 }
 

@@ -1,9 +1,9 @@
-import { AccountType, CalendarAttendeeStatus, FeatureType, ShareCapability } from "../../../api/common/TutanotaConstants.js"
+import { AccountType, CalendarAttendeeStatus, FeatureType } from "../../../api/common/TutanotaConstants.js"
 import type { CalendarEvent, CalendarRepeatRule, EncryptedMailAddress, Mail, MailboxProperties } from "../../../api/entities/tutanota/TypeRefs.js"
 import { createEncryptedMailAddress } from "../../../api/entities/tutanota/TypeRefs.js"
 import { AlarmInfo, DateWrapper } from "../../../api/entities/sys/TypeRefs.js"
 import type { MailboxDetail } from "../../../mail/model/MailModel.js"
-import { CalendarEventValidity, checkEventValidity, incrementSequence } from "../../date/CalendarUtils.js"
+import { CalendarEventValidity, checkEventValidity, generateUid, incrementSequence } from "../../date/CalendarUtils.js"
 import { isCustomizationEnabledForCustomer } from "../../../api/common/utils/Utils.js"
 import { arrayEqualsWithPredicate, assertNotNull, clone, noOp } from "@tutao/tutanota-utils"
 import { cleanMailAddress, findAttendeeInAddresses } from "../../../api/common/utils/CommonCalendarUtils.js"
@@ -17,11 +17,8 @@ import { UserError } from "../../../api/main/UserError.js"
 import { EntityClient } from "../../../api/common/EntityClient.js"
 import { BusinessFeatureRequiredError } from "../../../api/main/BusinessFeatureRequiredError.js"
 import { getSenderName } from "../../../misc/MailboxPropertiesUtils.js"
-import { CalendarEventUpdateNotificationModels, EventType } from "./CalendarEventEditModel.js"
-import { hasCapabilityOnGroup } from "../../../sharing/GroupUtils.js"
+import { assembleCalendarEventEditResult, assignEventIdentity, CalendarEventEditModels, EventType } from "./CalendarEventEditModel.js"
 import { ProgrammingError } from "../../../api/common/error/ProgrammingError.js"
-import { getPreselectedCalendar } from "../../view/eventeditor/CalendarEventEditDialog.js"
-import m from "mithril"
 import { getNonOrganizerAttendees } from "../../view/eventpopup/CalendarEventPopup.js"
 
 // whether to close dialog
@@ -29,8 +26,6 @@ export const enum EventSaveResult {
 	Saved,
 	Failed,
 }
-
-type SendMailModelFactory = () => SendMailModel
 
 type ShowProgressCallback = (arg0: Promise<unknown>) => unknown
 
@@ -93,7 +88,6 @@ export class CalendarEventSaveModel {
 	hasBusinessFeature: boolean = false
 	hasPremiumLegacy: boolean = false
 	readonly initialized: Promise<CalendarEventSaveModel>
-	private _selectedCalendar: CalendarInfo | null
 	private readonly sequence: string
 
 	constructor(
@@ -111,41 +105,10 @@ export class CalendarEventSaveModel {
 		private readonly zone: string,
 		private readonly responseTo: Mail | null,
 		private readonly showProgress: ShowProgressCallback = noOp,
-		private readonly uiUpdateCallback: () => void = m.redraw,
 	) {
-		this._selectedCalendar = getPreselectedCalendar(calendars, existingEvent)
-
 		this.calendars = calendars
 		this.sequence = existingEvent?.sequence ?? "0"
 		this.initialized = this.updateCustomerFeatures()
-	}
-
-	/**
-	 * filter the calendars an event can be saved to depending on the event type and attendee status.
-	 * Prevent moving the event to another calendar if you only have read permission or if the event has attendees.
-	 * FIXME: should be able to put event type into constructor?
-	 * */
-	getAvailableCalendars(hasGuests: boolean): ReadonlyArray<CalendarInfo> {
-		const calendarArray = Array.from(this.calendars.values())
-
-		if (hasGuests || this.eventType === EventType.INVITE) {
-			// We don't allow inviting in a shared calendar.
-			// If we have attendees, we cannot select a shared calendar.
-			// We also don't allow accepting invites into shared calendars.
-			return calendarArray.filter((calendarInfo) => !calendarInfo.shared)
-		} else {
-			return calendarArray.filter((calendarInfo) => hasCapabilityOnGroup(this.userController.user, calendarInfo.group, ShareCapability.Write))
-		}
-	}
-
-	set selectedCalendar(v: CalendarInfo | null) {
-		// FIXME: when changing, it's important what's in the attendees. if there are attendees, we must select a personal calendar.
-		this._selectedCalendar = v
-		this.uiUpdateCallback()
-	}
-
-	get selectedCalendar(): CalendarInfo | null {
-		return this._selectedCalendar
 	}
 
 	async updateCustomerFeatures(): Promise<CalendarEventSaveModel> {
@@ -176,9 +139,15 @@ export class CalendarEventSaveModel {
 	/**
 	 * save a new event to the selected calendar, invite all attendees except for the organizer and set up alarms.
 	 */
-	async saveNewEvent(newEvent: CalendarEvent, newAlarms: ReadonlyArray<AlarmInfo>, inviteModel: SendMailModel | null): Promise<EventSaveResult> {
+	async saveNewEvent(editModels: CalendarEventEditModels): Promise<EventSaveResult> {
 		let result = EventSaveResult.Failed
 		await this.initialized
+
+		const { eventValues, newAlarms, sendModels, calendar } = assembleCalendarEventEditResult(editModels)
+		const { inviteModel } = sendModels
+		const uid = generateUid(calendar.group._id, Date.now())
+		const newEvent = assignEventIdentity(eventValues, { uid })
+
 		assertEventValidity(newEvent)
 		if (this.processing) {
 			return result
@@ -186,7 +155,7 @@ export class CalendarEventSaveModel {
 		this.processing = true
 		try {
 			if (inviteModel != null) await this.sendInvites(newEvent, inviteModel)
-			await this.saveEvent(newEvent, newAlarms)
+			await this.saveEvent(newEvent, calendar, newAlarms)
 			result = EventSaveResult.Saved
 		} catch (e) {
 			if (e instanceof PayloadTooLargeError) {
@@ -201,6 +170,17 @@ export class CalendarEventSaveModel {
 		return result
 	}
 
+	async deleteEvent(editModels: CalendarEventEditModels): Promise<EventSaveResult> {
+		const event = assertNotNull(this.existingEvent, "tried to delete non-existing event")
+		const { sendModels } = assembleCalendarEventEditResult(editModels)
+		const { updateModel } = sendModels
+		if (updateModel) {
+			await this.distributor.sendCancellation(event, updateModel)
+		}
+		await this.calendarModel.deleteEvent(event)
+		return EventSaveResult.Saved
+	}
+
 	/**
 	 * save an invite from a file to the selected calendar, set up alarms and notify the organizer.
 	 */
@@ -209,16 +189,32 @@ export class CalendarEventSaveModel {
 	}
 
 	/**
-	 * update the event by deleting the old event, writing the new one, updating/inviting/cancelling any attendees where that is necessary.
-	 * @reject UserError
+	 * update a single occurrence of an event by adding an exclusion to the original event if it does not exist,
+	 * deleting the rescheduled occurrence if it already exists and uploading the new rescheduled occurrence.
+	 * @param editModels
 	 */
-	async updateExistingEvent(
-		newEvent: CalendarEvent,
-		newAlarms: ReadonlyArray<AlarmInfo>,
-		{ inviteModel, updateModel, cancelModel, responseModel }: CalendarEventUpdateNotificationModels,
-	): Promise<EventSaveResult> {
+	async updateSingleExistingEvent(editModels: CalendarEventEditModels): Promise<EventSaveResult> {
+		throw new ProgrammingError("not implemented yet.")
+	}
+
+	/**
+	 * update the whole event by completely deleting the old event, writing the new one,
+	 * updating/inviting/cancelling any attendees where that is necessary.
+	 */
+	async updateExistingEvent(editModels: CalendarEventEditModels): Promise<EventSaveResult> {
 		let result = EventSaveResult.Failed
 		await this.initialized
+
+		const { eventValues, newAlarms, sendModels, calendar } = assembleCalendarEventEditResult(editModels)
+		const { updateModel, cancelModel, responseModel, inviteModel } = sendModels
+
+		const mayIncrement = editModels.saveModel.eventType === EventType.OWN || editModels.saveModel.eventType === EventType.SHARED_RW
+		const { uid: oldUid, sequence: oldSequence } = assertNotNull(this.existingEvent, "called update existing event on nonexisting event")
+		const newEvent = assignEventIdentity(eventValues, {
+			uid: assertNotNull(oldUid, "called update existing event on event without uid"),
+			sequence: incrementSequence(oldSequence, mayIncrement),
+		})
+
 		assertEventValidity(newEvent)
 
 		if (this.processing) {
@@ -231,19 +227,19 @@ export class CalendarEventSaveModel {
 			if (this.eventType === EventType.OWN && (this.shouldSendUpdates || eventHasChanged(newEvent, this.existingEvent))) {
 				// It is our own event. We might need to send out invites/cancellations/updates
 				await this.sendNotifications(newEvent, { inviteModel, updateModel, cancelModel })
-				return this.saveEvent(newEvent, newAlarms)
+				// fixme: we could just take existing event ids where it's required?
+				newEvent._id = assertNotNull(this.existingEvent?._id, "no id to update existing event")
+				newEvent._ownerGroup = assertNotNull(this.existingEvent?._ownerGroup, "no ownergroup to update existing event")
+				newEvent._permissions = assertNotNull(this.existingEvent?._permissions, "no permissions to update existing event")
+				return this.saveEvent(newEvent, calendar, newAlarms)
 			} else if (this.eventType === EventType.INVITE && responseModel != null) {
 				// We have been invited by another person (internal/ unsecure external)
 				await this.respondToOrganizer(newEvent, responseModel)
-				return await this.saveEvent(newEvent, newAlarms)
+				return await this.saveEvent(newEvent, calendar, newAlarms)
 			} else {
 				// Either this is an event in a shared calendar. We cannot send anything because it's not our event.
 				// Or no changes were made that require sending updates and we just save other changes.
-				await this.showProgress(
-					(async () => {
-						await this.saveNewEvent(newEvent, newAlarms, inviteModel)
-					})(),
-				)
+				await this.showProgress(this.saveEvent(newEvent, calendar, newAlarms))
 				return EventSaveResult.Saved
 			}
 		} catch (e) {
@@ -273,11 +269,11 @@ export class CalendarEventSaveModel {
 		}
 	}
 
-	private async saveEvent(eventToSave: CalendarEvent, newAlarms: ReadonlyArray<AlarmInfo>): Promise<EventSaveResult> {
+	private async saveEvent(eventToSave: CalendarEvent, calendar: CalendarInfo, newAlarms: ReadonlyArray<AlarmInfo>): Promise<EventSaveResult> {
 		if (this.userController.user.accountType === AccountType.EXTERNAL) {
 			return Promise.resolve(EventSaveResult.Failed)
 		}
-		const groupRoot = assertNotNull(this.selectedCalendar, "selected calendar was null when trying to save event").groupRoot
+		const { groupRoot } = calendar
 
 		if (eventToSave._id == null) {
 			await this.calendarModel.createEvent(eventToSave, newAlarms, this.zone, groupRoot)
@@ -307,6 +303,9 @@ export class CalendarEventSaveModel {
 			cancelModel: SendMailModel | null
 		},
 	): Promise<void> {
+		if (models.updateModel == null && models.cancelModel == null && models.inviteModel == null) {
+			return
+		}
 		if (this.shouldShowSendInviteNotAvailable()) {
 			throw new BusinessFeatureRequiredError("businessFeatureRequiredInvite_msg")
 		}
@@ -411,7 +410,7 @@ export function addressToMailAddress(mailboxProperties: MailboxProperties, addre
 	})
 }
 
-function areRepeatRulesEqual(r1: CalendarRepeatRule | null, r2: CalendarRepeatRule | null): boolean {
+export function areRepeatRulesEqual(r1: CalendarRepeatRule | null, r2: CalendarRepeatRule | null): boolean {
 	return (
 		r1 === r2 ||
 		(r1?.endType === r2?.endType &&

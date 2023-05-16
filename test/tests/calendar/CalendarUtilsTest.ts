@@ -10,8 +10,8 @@ import {
 	getAllDayDateForTimezone,
 	getAllDayDateUTCFromZone,
 	getCalendarMonth,
-	getDiffInDays,
-	getDiffInHours,
+	getDiffIn24hIntervals,
+	getDiffIn60mIntervals,
 	getStartOfDayWithZone,
 	getStartOfWeek,
 	getTimeZone,
@@ -59,12 +59,16 @@ o.spec("calendar utils tests", function () {
 
 	o.spec("getStartOfDayWithZone", function () {
 		o("it produces a date at the start of the day according to the time zone", function () {
-			// DateTime.fromObject({year: 2023, month: 1, day: 30, hour: 5, minute: 30}, {zone: "Asia/Krasnoyarsk"}).toMillis()
-			const date = new Date(1675031400000)
-			// DateTime.fromObject({year: 2023, month: 1, day: 30}, {zone: "Asia/Krasnoyarsk"}).toMillis()
-			const expected = 1675011600000
+			const date = new Date("2023-01-29T22:30:00.000Z")
+			const expected = "2023-01-29T17:00:00.000Z"
 			const result = getStartOfDayWithZone(date, "Asia/Krasnoyarsk")
-			o(result.getTime()).equals(expected)(iso`${result.getTime()} vs ${expected}`)
+			o(result.toISOString()).equals(expected)(`${result.toISOString()} vs ${expected}`)
+		})
+		o("when given a date that's already start of day, that date is returned", function () {
+			const date = new Date("2023-01-29T00:00:00.000Z")
+			const expected = "2023-01-29T00:00:00.000Z"
+			const result = getStartOfDayWithZone(date, "utc")
+			o(result.toISOString()).equals(expected)("the utc date was not kept the same")
 		})
 	})
 
@@ -635,17 +639,18 @@ o.spec("calendar utils tests", function () {
 		})
 	})
 	o.spec("Diff between events", function () {
-		o("diff in hours", function () {
-			o(getDiffInHours(new Date(2021, 0, 1, 0, 0), new Date(2021, 0, 2, 0, 0))).equals(24)
-			o(getDiffInHours(new Date(2021, 0, 2, 0, 0), new Date(2021, 0, 1, 0, 0))).equals(-24)
-			o(getDiffInHours(new Date(2021, 0, 1, 0, 0), new Date(2021, 0, 1, 0, 30))).equals(0)
-			o(getDiffInHours(new Date(2021, 0, 1, 0, 0), new Date(2021, 0, 1, 1, 0))).equals(1)
+		o("getDiffIn60mIntervals", function () {
+			o(getDiffIn60mIntervals(new Date("2020-12-31T23:00:00.000Z"), new Date("2021-01-01T23:00:00.000Z"))).equals(24)
+			o(getDiffIn60mIntervals(new Date("2021-01-01T23:00:00.000Z"), new Date("2020-12-31T23:00:00.000Z"))).equals(-24)
+			o(getDiffIn60mIntervals(new Date("2020-12-31T23:00:00.000Z"), new Date("2020-12-31T23:30:00.000Z"))).equals(0)
+			o(getDiffIn60mIntervals(new Date("2020-12-31T23:00:00.000Z"), new Date("2021-01-01T00:00:00.000Z"))).equals(1)
 		})
-		o("diff in days", function () {
-			o(getDiffInDays(new Date(2021, 0, 1, 0, 0), new Date(2021, 0, 2, 0, 0))).equals(1)
-			o(getDiffInDays(new Date(2021, 0, 2, 0, 0), new Date(2021, 0, 1, 0, 0))).equals(-1)
-			o(getDiffInDays(new Date(2021, 0, 1, 0, 0), new Date(2021, 0, 1, 0, 30))).equals(0)
-			o(getDiffInDays(new Date(2021, 0, 1, 0, 0), new Date(2021, 0, 1, 1, 0))).equals(0)
+		o("getDiffIn24hIntervals", function () {
+			o(getDiffIn24hIntervals(new Date("2020-12-31T23:00:00.000Z"), new Date("2021-01-01T23:00:00.000Z"))).equals(1)
+			o(getDiffIn24hIntervals(new Date("2021-01-01T23:00:00.000Z"), new Date("2020-12-31T23:00:00.000Z"))).equals(-1)
+			o(getDiffIn24hIntervals(new Date("2021-01-01T00:01:00.000Z"), new Date("2020-12-30T23:59:00.000Z"))).equals(-2)("less than 2*24, but gives -2?")
+			o(getDiffIn24hIntervals(new Date("2020-12-31T23:00:00.000Z"), new Date("2020-12-31T23:30:00.000Z"))).equals(0)
+			o(getDiffIn24hIntervals(new Date("2020-12-31T23:00:00.000Z"), new Date("2021-01-01T00:00:00.000Z"))).equals(0)
 		})
 	})
 	o.spec("Event start and end time comparison", function () {

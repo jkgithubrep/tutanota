@@ -11,7 +11,7 @@ import { NoopProgressMonitor } from "../../api/common/utils/ProgressMonitor"
 import { DataFile } from "../../api/common/DataFile"
 import { findAttendeeInAddresses } from "../../api/common/utils/CommonCalendarUtils.js"
 import { Recipient } from "../../api/common/recipients/Recipient.js"
-import { CalendarEventEditMode, getEventType } from "../view/eventeditor/CalendarEventEditDialog.js"
+import { getEventType } from "../view/eventeditor/CalendarEventEditDialog.js"
 import { CalendarEventEditModels, EventType } from "../model/eventeditor/CalendarEventEditModel.js"
 import { isCustomizationEnabledForCustomer } from "../../api/common/utils/Utils.js"
 
@@ -56,6 +56,7 @@ export async function showEventDetails(event: CalendarEvent, eventBubbleRect: Cl
 	let eventType: EventType
 	let editModelsFactory: lazy<Promise<CalendarEventEditModels>>
 	let hasBusinessFeature: boolean
+	let ownAttendance = null
 	if (!locator.logins.getUserController().isInternalUser()) {
 		// external users cannot delete/edit events as they have no calendar.
 		eventType = EventType.EXTERNAL
@@ -69,12 +70,13 @@ export async function showEventDetails(event: CalendarEvent, eventBubbleRect: Cl
 		])
 		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
 		const ownMailAddresses = mailboxProperties.mailAddressProperties.map(({ mailAddress }) => mailAddress)
+		ownAttendance = (findAttendeeInAddresses(latestEvent.attendees, ownMailAddresses)?.status as CalendarAttendeeStatus) ?? null
 		eventType = getEventType(latestEvent, calendarInfos, ownMailAddresses, locator.logins.getUserController().user)
-		editModelsFactory = () => locator.calendarEventEditModels(CalendarEventEditMode.All, latestEvent, mailboxDetails, mailboxProperties)
+		editModelsFactory = () => locator.calendarEventEditModels(latestEvent, mailboxDetails, mailboxProperties)
 		hasBusinessFeature = isCustomizationEnabledForCustomer(customer, FeatureType.BusinessFeatureEnabled)
 	}
 
-	const viewModel = new CalendarEventPopupViewModel(latestEvent, locator.calendarModel, eventType, hasBusinessFeature, editModelsFactory)
+	const viewModel = new CalendarEventPopupViewModel(latestEvent, locator.calendarModel, eventType, hasBusinessFeature, ownAttendance, editModelsFactory)
 	new CalendarEventPopup(viewModel, eventBubbleRect, htmlSanitizer).show()
 }
 

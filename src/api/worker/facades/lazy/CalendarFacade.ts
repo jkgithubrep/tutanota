@@ -24,7 +24,6 @@ import {
 	groupByAndMapUniquely,
 	isNotNull,
 	neverNull,
-	noOp,
 	ofClass,
 	promiseMap,
 	stringToUtf8Uint8Array,
@@ -195,7 +194,7 @@ export class CalendarFacade {
 		this.hashEventUid(event)
 
 		if (oldEvent) {
-			await this.entityClient.erase(oldEvent).catch(ofClass(NotFoundError, noOp))
+			await this.entityClient.erase(oldEvent).catch(ofClass(NotFoundError, () => console.log("could not delete old event when saving new one")))
 		}
 
 		return await this._saveCalendarEvents(

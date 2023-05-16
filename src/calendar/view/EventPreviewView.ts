@@ -5,7 +5,7 @@ import { AllIcons, Icon } from "../../gui/base/Icon"
 import { theme } from "../../gui/theme"
 import { BootIcons } from "../../gui/base/icons/BootIcons"
 import { Icons } from "../../gui/base/icons/Icons"
-import { createRepeatRuleFrequencyValues, formatEventDuration, getRepeatEndTime, getTimeZone, iconForAttendeeStatus } from "../date/CalendarUtils"
+import { createRepeatRuleFrequencyValues, formatEventDuration, getRepeatEndTimeForDisplay, getTimeZone, iconForAttendeeStatus } from "../date/CalendarUtils"
 import { CalendarAttendeeStatus, EndType, getAttendeeStatus, RepeatPeriod } from "../../api/common/TutanotaConstants"
 import { downcast, memoized } from "@tutao/tutanota-utils"
 import { lang } from "../../misc/LanguageViewModel"
@@ -18,7 +18,7 @@ import { renderReplyButtons } from "../../mail/view/EventBanner.js"
 export type EventPreviewViewAttrs = {
 	event: Omit<CalendarEvent, "description">
 	sanitizedDescription: string | null
-	setParticipation?: (status: CalendarAttendeeStatus) => void
+	participation: null | { status: string; setParticipation: (status: CalendarAttendeeStatus) => unknown }
 }
 
 export class EventPreviewView implements Component<EventPreviewViewAttrs> {
@@ -29,7 +29,7 @@ export class EventPreviewView implements Component<EventPreviewViewAttrs> {
 		this.getLocationUrl = memoized(getLocationUrl)
 	}
 
-	view({ attrs: { event, sanitizedDescription, setParticipation } }: Vnode<EventPreviewViewAttrs>): Children {
+	view({ attrs: { event, sanitizedDescription, participation } }: Vnode<EventPreviewViewAttrs>): Children {
 		const attendees = prepareAttendees(event.attendees, event.organizer)
 
 		return m(".flex.col", [
@@ -44,7 +44,7 @@ export class EventPreviewView implements Component<EventPreviewViewAttrs> {
 				]),
 				this.renderLocation(event.location),
 				this.renderAttendeesSection(attendees),
-				this.renderAttendanceSection(attendees, setParticipation),
+				this.renderAttendanceSection(attendees, participation),
 				this.renderDescription(sanitizedDescription),
 			]),
 		])
@@ -113,12 +113,12 @@ export class EventPreviewView implements Component<EventPreviewViewAttrs> {
 	/**
 	 * if we're an attendee of this event, this renders a selector to be able to set our own attendance.
 	 * @param attendees list of attendees (including the organizer)
-	 * @param setParticipation function to send a participation reply for this event.
+	 * @param participation
 	 * @private
 	 */
-	private renderAttendanceSection(attendees: Array<CalendarEventAttendee>, setParticipation?: (status: CalendarAttendeeStatus) => void): Children {
-		if (attendees.length === 0 || setParticipation == null) return null
-		return m(".flex.pb-s", [this.renderSectionIndicator(BootIcons.Contacts), renderReplyButtons(setParticipation, CalendarAttendeeStatus.DECLINED)])
+	private renderAttendanceSection(attendees: Array<CalendarEventAttendee>, participation: EventPreviewViewAttrs["participation"]): Children {
+		if (attendees.length === 0 || participation == null) return null
+		return m(".flex.pb-s", [this.renderSectionIndicator(BootIcons.Contacts), renderReplyButtons(participation)])
 	}
 
 	private renderAttendee(attendee: CalendarEventAttendee): Children {
@@ -207,7 +207,7 @@ function formatRepetitionEnd(repeatRule: RepeatRule, isAllDay: boolean): string 
 			)
 
 		case EndType.UntilDate:
-			const repeatEndTime = getRepeatEndTime(repeatRule, isAllDay, getTimeZone())
+			const repeatEndTime = getRepeatEndTimeForDisplay(repeatRule, isAllDay, getTimeZone())
 			return " " + lang.get("until_label") + " " + formatDateWithMonth(repeatEndTime)
 
 		default:

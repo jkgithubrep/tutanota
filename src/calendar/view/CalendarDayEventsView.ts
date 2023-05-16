@@ -64,10 +64,10 @@ export class CalendarDayEventsView implements Component<Attrs> {
 					m(".calendar-hour.flex.cursor-pointer", {
 						onclick: (e: MouseEvent) => {
 							e.stopPropagation()
-							attrs.onTimePressed(time.hours, time.minutes)
+							attrs.onTimePressed(time.hour, time.minute)
 						},
 						oncontextmenu: (e: MouseEvent) => {
-							attrs.onTimeContextPressed(time.hours, time.minutes)
+							attrs.onTimeContextPressed(time.hour, time.minute)
 							e.preventDefault()
 						},
 					}),

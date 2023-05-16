@@ -38,7 +38,7 @@ export class RepeatRuleEditor implements Component<RepeatRuleEditorAttrs> {
 	}
 
 	private renderEndCondition(model: CalendarEventWhenModel): Children {
-		if (model.repeatEndType == EndType.Never) {
+		if (model.repeatPeriod == null) {
 			return null
 		}
 		return [m(".flex-grow.pr-s", this.renderEndType(model)), m(".flex-grow.pl-s", this.renderEndValue(model))]
@@ -127,8 +127,8 @@ export class RepeatRuleEditor implements Component<RepeatRuleEditorAttrs> {
 			})
 		} else if (model.repeatEndType === EndType.UntilDate) {
 			return m(DatePicker, {
-				date: model.repeatEndDate,
-				onDateSelected: (date) => (model.repeatEndDate = date),
+				date: model.repeatEndDateForDisplay,
+				onDateSelected: (date) => (model.repeatEndDateForDisplay = date),
 				startOfTheWeekOffset: this.startOfTheWeekOffset,
 				label: "emptyString_msg",
 				nullSelectionText: "emptyString_msg",

@@ -11,19 +11,26 @@ import { Stripped } from "../../../api/common/utils/EntityUtils.js"
 import { cleanMailAddress, findRecipientWithAddress } from "../../../api/common/utils/CommonCalendarUtils.js"
 import { getContactDisplayName } from "../../../contacts/model/ContactUtils.js"
 import { clone, defer, DeferredObject, findAll, lazy, noOp } from "@tutao/tutanota-utils"
-import { CalendarAttendeeStatus } from "../../../api/common/TutanotaConstants.js"
+import { CalendarAttendeeStatus, ShareCapability } from "../../../api/common/TutanotaConstants.js"
 import { CalendarEventUpdateNotificationModels, EventType } from "./CalendarEventEditModel.js"
 import { RecipientsModel, ResolveMode } from "../../../api/main/RecipientsModel.js"
 import { Guest } from "../../date/CalendarInvites.js"
 import { isSecurePassword } from "../../../misc/passwords/PasswordUtils.js"
 import { SendMailModel } from "../../../mail/editor/SendMailModel.js"
 import { RecipientField } from "../../../mail/model/MailUtils.js"
+import { CalendarInfo } from "../CalendarModel.js"
+import { getPreselectedCalendar } from "../../view/eventeditor/CalendarEventEditDialog.js"
+import { hasCapabilityOnGroup } from "../../../sharing/GroupUtils.js"
+import { UserController } from "../../../api/main/UserController.js"
+import { UserError } from "../../../api/main/UserError.js"
 
 /** there is no point in returning recipients, the SendMailModel will re-resolve them anyway. */
 type AttendanceModelResult = {
 	attendees: CalendarEvent["attendees"]
 	organizer: CalendarEvent["organizer"]
 	isConfidential: boolean
+	/** which calendar should the result be assigned to */
+	calendar: CalendarInfo
 } & CalendarEventUpdateNotificationModels
 
 /**
@@ -56,12 +63,17 @@ export class CalendarEventWhoModel {
 	private _organizer: CalendarEventAttendee | null = null
 	/** the attendee that has one of our mail addresses. MUST NOT be in _attendees */
 	private _ownAttendee: CalendarEventAttendee | null = null
+	/**  this should only be relevant to saving, but at the moment we restrict attendees depending on the calendar we're saving to */
+	private _selectedCalendar: CalendarInfo | null = null
 
 	public isConfidential: boolean
 
 	/**
 	 *
 	 * @param initialValues
+	 * @param eventType
+	 * @param calendars
+	 * @param userController
 	 * @param isNew
 	 * @param ownMailAddresses an array of the mail addresses this user could be mentioned as as an attendee or organizer.
 	 * @param recipientsModel
@@ -71,6 +83,9 @@ export class CalendarEventWhoModel {
 	 */
 	constructor(
 		initialValues: Partial<Stripped<CalendarEvent>>,
+		private readonly eventType: EventType,
+		private readonly calendars: Map<Id, CalendarInfo>,
+		private readonly userController: UserController,
 		private readonly isNew: boolean,
 		private readonly ownMailAddresses: ReadonlyArray<EncryptedMailAddress>,
 		private readonly recipientsModel: RecipientsModel,
@@ -79,7 +94,7 @@ export class CalendarEventWhoModel {
 		private readonly uiUpdateCallback: () => void = noOp,
 	) {
 		this.setupAttendees(initialValues)
-
+		this._selectedCalendar = getPreselectedCalendar(this.calendars, initialValues)
 		// resolve current recipients so that we know what external passwords to display
 		const resolvePromises = initialValues.attendees?.map((a) => this.resolveAndCacheAddress(a.address)).concat() ?? []
 		if (initialValues.organizer) {
@@ -89,6 +104,33 @@ export class CalendarEventWhoModel {
 
 		this.initiallyHadOtherAttendees = this.hasOtherAttendees()
 		this.isConfidential = initialValues.invitedConfidentially ?? false
+	}
+
+	set selectedCalendar(v: CalendarInfo | null) {
+		// FIXME: when changing, it's important what's in the attendees. if there are attendees, we must select a personal calendar.
+		this._selectedCalendar = v
+		this.uiUpdateCallback()
+	}
+
+	get selectedCalendar(): CalendarInfo | null {
+		return this._selectedCalendar
+	}
+
+	/**
+	 * filter the calendars an event can be saved to depending on the event type and attendee status.
+	 * Prevent moving the event to another calendar if you only have read permission or if the event has attendees.
+	 * */
+	getAvailableCalendars(): ReadonlyArray<CalendarInfo> {
+		const calendarArray = Array.from(this.calendars.values())
+
+		if (this.hasOtherAttendees() || this.eventType === EventType.INVITE) {
+			// We don't allow inviting in a shared calendar.
+			// If we have attendees, we cannot select a shared calendar.
+			// We also don't allow accepting invites into shared calendars.
+			return calendarArray.filter((calendarInfo) => !calendarInfo.shared)
+		} else {
+			return calendarArray.filter((calendarInfo) => hasCapabilityOnGroup(this.userController.user, calendarInfo.group, ShareCapability.Write))
+		}
 	}
 
 	private async resolveAndCacheAddress(a: PartialRecipient): Promise<void> {
@@ -393,6 +435,10 @@ export class CalendarEventWhoModel {
 	}
 
 	get result(): AttendanceModelResult {
+		if (this._selectedCalendar == null) {
+			throw new UserError("calendar_label")
+		}
+
 		const {
 			kept: attendeesToUpdate,
 			deleted: attendeesToCancel,
@@ -420,6 +466,7 @@ export class CalendarEventWhoModel {
 			inviteModel: attendeesToInvite.length > 0 ? this.prepareSendModel(attendeesToInvite) : null,
 			updateModel: attendeesToUpdate.length > 0 ? this.prepareSendModel(attendeesToUpdate) : null,
 			responseModel,
+			calendar: this._selectedCalendar,
 		}
 	}
 }

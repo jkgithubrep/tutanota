@@ -8,7 +8,7 @@ import {
 	eventEndsAfterDay,
 	EventLayoutMode,
 	eventStartsBefore,
-	getDiffInDays,
+	getDiffIn24hIntervals,
 	getEventColor,
 	getEventEnd,
 	getEventStart,
@@ -471,8 +471,8 @@ export class MultiDayCalendarView implements Component<Attrs> {
 					rows.map((event) => {
 						const isAllDay = isAllDayEvent(event)
 						const eventEnd = isAllDay ? incrementDate(getEventEnd(event, zone), -1) : event.endTime
-						const dayOfStartDate = getDiffInDays(firstDay, getEventStart(event, zone))
-						const dayOfEndDate = getDiffInDays(firstDay, eventEnd)
+						const dayOfStartDate = getDiffIn24hIntervals(firstDay, getEventStart(event, zone))
+						const dayOfEndDate = getDiffIn24hIntervals(firstDay, eventEnd)
 						const startsBefore = eventStartsBefore(firstDay, zone, event)
 						const endsAfter = eventEndsAfterDay(lastDay, zone, event)
 						const left = startsBefore ? 0 : dayOfStartDate * dayWidth

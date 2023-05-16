@@ -12,6 +12,7 @@ import { showProgressDialog } from "../../gui/dialogs/ProgressDialog"
 import type { lazy } from "@tutao/tutanota-utils"
 import { isRepliedTo } from "../model/MailUtils"
 import { findAttendeeInAddresses } from "../../api/common/utils/CommonCalendarUtils.js"
+import { EventPreviewViewAttrs } from "../../calendar/view/EventPreviewView.js"
 
 export type Attrs = {
 	event: CalendarEvent
@@ -44,7 +45,10 @@ export class EventBanner implements Component<Attrs> {
 					method === CalendarMethod.REQUEST && ownAttendee
 						? isRepliedTo(mail) || (ownAttendee && ownAttendee.status !== CalendarAttendeeStatus.NEEDS_ACTION)
 							? m(".pt.align-self-start.start.smaller", lang.get("alreadyReplied_msg"))
-							: renderReplyButtons((status: CalendarAttendeeStatus) => sendResponse(event, recipient, status, mail))
+							: renderReplyButtons({
+									status: ownAttendee.status,
+									setParticipation: (status: CalendarAttendeeStatus) => sendResponse(event, recipient, status, mail),
+							  })
 						: method === CalendarMethod.REPLY
 						? m(".pt.align-self-start.start.smaller", lang.get("eventNotificationUpdated_msg"))
 						: null,
@@ -92,7 +96,7 @@ export class BannerButton implements Component<BannerButtonAttrs> {
 	}
 }
 
-export function renderReplyButtons(updateStatus: (status: CalendarAttendeeStatus) => void, currentStatus?: CalendarAttendeeStatus) {
+export function renderReplyButtons(participation: NonNullable<EventPreviewViewAttrs["participation"]>) {
 	const colors = {
 		borderColor: theme.content_button,
 		color: theme.content_fg,
@@ -104,7 +108,7 @@ export function renderReplyButtons(updateStatus: (status: CalendarAttendeeStatus
 	}
 
 	const makeStatusButtonAttrs = (status: CalendarAttendeeStatus, text: TranslationKey): BannerButtonAttrs =>
-		Object.assign({ text, click: () => updateStatus(status) }, currentStatus === status ? highlightColors : colors)
+		Object.assign({ text, click: () => participation.setParticipation(status) }, participation.status === status ? highlightColors : colors)
 
 	return m(".flex.col", [
 		lang.get("invitedToEvent_msg"),
@@ -116,7 +120,7 @@ export function renderReplyButtons(updateStatus: (status: CalendarAttendeeStatus
 	])
 }
 
-function sendResponse(event: CalendarEvent, recipient: string, status: CalendarAttendeeStatus, previousMail: Mail) {
+export function sendResponse(event: CalendarEvent, recipient: string, status: CalendarAttendeeStatus, previousMail: Mail) {
 	showProgressDialog(
 		"pleaseWait_msg",
 		import("../../calendar/date/CalendarInvites").then(({ getLatestEvent, replyToEventInvitation }) => {

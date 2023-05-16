@@ -1,16 +1,16 @@
 import { pad } from "@tutao/tutanota-utils"
-import type { DateTime } from "luxon"
+import { DateTime } from "luxon"
 
 /**
  * A wrapper around time handling for the calendar stuff, mostly for the CalendarEventWhenModel
  */
 export class Time {
-	readonly hours: number
-	readonly minutes: number
+	readonly hour: number
+	readonly minute: number
 
-	constructor(hours: number, minutes: number) {
-		this.hours = Math.floor(hours) % 24
-		this.minutes = Math.floor(minutes) % 60
+	constructor(hour: number, minute: number) {
+		this.hour = Math.floor(hour) % 24
+		this.minute = Math.floor(minute) % 60
 	}
 
 	static fromDate(date: Date): Time {
@@ -28,13 +28,19 @@ export class Time {
 	 */
 	toDate(baseDate?: Date): Date {
 		const date = baseDate ? new Date(baseDate) : new Date()
-		date.setHours(this.hours)
-		date.setMinutes(this.minutes)
+		date.setHours(this.hour)
+		date.setMinutes(this.minute)
+		date.setSeconds(0)
+		date.setMilliseconds(0)
 		return date
 	}
 
+	toDateTime(baseDate: Date, zone: string): DateTime {
+		return DateTime.fromJSDate(baseDate, { zone }).set(this)
+	}
+
 	equals(otherTime: Time): boolean {
-		return this.hours === otherTime.hours && this.minutes === otherTime.minutes
+		return this.hour === otherTime.hour && this.minute === otherTime.minute
 	}
 
 	toString(amPmFormat: boolean): string {
@@ -42,22 +48,22 @@ export class Time {
 	}
 
 	to12HourString(): string {
-		const minutesString = pad(this.minutes, 2)
+		const minutesString = pad(this.minute, 2)
 
-		if (this.hours === 0) {
+		if (this.hour === 0) {
 			return `12:${minutesString} am`
-		} else if (this.hours === 12) {
+		} else if (this.hour === 12) {
 			return `12:${minutesString} pm`
-		} else if (this.hours > 12) {
-			return `${this.hours - 12}:${minutesString} pm`
+		} else if (this.hour > 12) {
+			return `${this.hour - 12}:${minutesString} pm`
 		} else {
-			return `${this.hours}:${minutesString} am`
+			return `${this.hour}:${minutesString} am`
 		}
 	}
 
 	to24HourString(): string {
-		const hours = pad(this.hours, 2)
-		const minutes = pad(this.minutes, 2)
+		const hours = pad(this.hour, 2)
+		const minutes = pad(this.minute, 2)
 		return `${hours}:${minutes}`
 	}
 
@@ -66,8 +72,8 @@ export class Time {
 		minutes: number
 	} {
 		return {
-			hours: this.hours,
-			minutes: this.minutes,
+			hours: this.hour,
+			minutes: this.minute,
 		}
 	}
 }

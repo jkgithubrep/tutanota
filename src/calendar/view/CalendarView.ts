@@ -9,7 +9,7 @@ import { Icons } from "../../gui/base/icons/Icons"
 import { downcast, getStartOfDay, memoized, ofClass } from "@tutao/tutanota-utils"
 import type { CalendarEvent, GroupSettings, UserSettingsGroupRoot } from "../../api/entities/tutanota/TypeRefs.js"
 import { CalendarEventTypeRef, createGroupSettings } from "../../api/entities/tutanota/TypeRefs.js"
-import { defaultCalendarColor, FeatureType, GroupType, Keys, ShareCapability, TimeFormat } from "../../api/common/TutanotaConstants"
+import { CalendarAttendeeStatus, defaultCalendarColor, FeatureType, GroupType, Keys, ShareCapability, TimeFormat } from "../../api/common/TutanotaConstants"
 import { locator } from "../../api/main/MainLocator"
 import { getTimeZone, shouldDefaultToAmPmTimeFormat } from "../date/CalendarUtils"
 import { Button, ButtonColor, ButtonType } from "../../gui/base/Button.js"
@@ -59,6 +59,7 @@ import { BackgroundColumnLayout } from "../../gui/BackgroundColumnLayout.js"
 import { theme } from "../../gui/theme.js"
 import { CalendarMobileHeader } from "./CalendarMobileHeader.js"
 import { CalendarDesktopToolbar } from "./CalendarDesktopToolbar.js"
+import { findAttendeeInAddresses, getEventWithDefaultTimes } from "../../api/common/utils/CommonCalendarUtils.js"
 
 export type GroupColors = Map<Id, string>
 
@@ -385,13 +386,8 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 
 		const mailboxDetails = await locator.mailModel.getUserMailboxDetails()
 		const mailboxProperties = await locator.mailModel.getMailboxProperties(mailboxDetails.mailboxGroupRoot)
-		const editModels = await locator.calendarEventEditModels(
-			CalendarEventEditMode.All,
-			getEventWithDefaultTimes(dateToUse),
-			mailboxDetails,
-			mailboxProperties,
-		)
-		await showNewCalendarEventEditDialog(editModels, mailboxDetails)
+		const editModels = await locator.calendarEventEditModels(getEventWithDefaultTimes(dateToUse), mailboxDetails, mailboxProperties)
+		await showNewCalendarEventEditDialog(editModels)
 	}
 
 	_viewPeriod(viewType: CalendarViewType, next: boolean) {
@@ -797,12 +793,24 @@ export class CalendarView extends BaseTopLevelView implements TopLevelView<Calen
 		const userController = locator.logins.getUserController()
 		const customer = await userController.loadCustomer()
 		const ownMailAddresses = getEnabledMailAddressesWithUser(mailboxDetails, userController.userGroupInfo)
+		const ownAttendance = (findAttendeeInAddresses(selectedEvent.attendees, ownMailAddresses)?.status as CalendarAttendeeStatus) ?? null
 		const eventType = getEventType(selectedEvent, calendars, ownMailAddresses, userController.user)
 		// FIXME
 		const previousMail = null
 		const hasBusinessFeature = isCustomizationEnabledForCustomer(customer, FeatureType.BusinessFeatureEnabled)
-		const popupModel = new CalendarEventPopupViewModel(selectedEvent, locator.calendarModel, eventType, hasBusinessFeature, (mode: CalendarEventEditMode) =>
-			locator.calendarEventEditModels(mode, selectedEvent, mailboxDetails, mailboxProperties),
+		const popupModel = new CalendarEventPopupViewModel(
+			selectedEvent,
+			locator.calendarModel,
+			eventType,
+			hasBusinessFeature,
+			ownAttendance,
+			async (mode: CalendarEventEditMode) => {
+				if (mode === CalendarEventEditMode.All) {
+					return locator.calendarEventEditModels(await resolveCalendarEventProgenitor(selectedEvent), mailboxDetails, mailboxProperties)
+				} else {
+					return locator.calendarEventEditModels(selectedEvent, mailboxDetails, mailboxProperties)
+				}
+			},
 		)
 		new CalendarEventPopup(popupModel, rect, htmlSanitizer).show()
 	}

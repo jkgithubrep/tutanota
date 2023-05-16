@@ -22,59 +22,7 @@ export class CalendarEventPopup implements ModalComponent {
 	private readonly sanitizedDescription: string
 	private dom: HTMLElement | null = null
 
-	private readonly handleDeleteButtonClick: () => void = () => {
-		if (this.model.isRepeatingForDeleting) {
-			createAsyncDropdown({
-				lazyButtons: () =>
-					Promise.resolve([
-						{
-							label: "deleteSingleEventRecurrence_action",
-							click: () => this.model.deleteSingle(),
-						},
-						{
-							label: "deleteAllEventRecurrence_action",
-							click: () => this.confirmDeleteClose(),
-						},
-					]),
-				width: 300,
-			})(new MouseEvent("click", {}), this.dom!)
-		} else {
-			// noinspection JSIgnoredPromiseFromCall
-			this.confirmDeleteClose()
-			this.close()
-		}
-	}
-
-	private readonly handleEditButtonClick: () => void = () => {
-		if (this.model.isRepeatingForEditing) {
-			createAsyncDropdown({
-				lazyButtons: () =>
-					Promise.resolve([
-						{
-							label: "updateOneCalendarEvent_action",
-							click: () => this.model.editSingle(),
-						},
-						{
-							label: "updateAllCalendarEvents_action",
-							click: () => this.model.editAll(),
-						},
-					]),
-				width: 300,
-			})(new MouseEvent("click", {}), this.dom!)
-		} else {
-			// noinspection JSIgnoredPromiseFromCall
-			this.model.editAll()
-			this.close()
-		}
-	}
-	// we handle askForUpdates here to avoid making a request if not necessary
-	private readonly handleSendUpdatesClick: () => void = () =>
-		Dialog.confirm("sendUpdates_msg")
-			.then(() => this.model.sendUpdates())
-			.then(this.close)
-
 	/**
-	 *
 	 * @param model
 	 * @param eventBubbleRect the rect where the event bubble was displayed that was clicked (if any)
 	 * @param htmlSanitizer
@@ -92,6 +40,65 @@ export class CalendarEventPopup implements ModalComponent {
 		this.setupShortcuts()
 		this.view = this.view.bind(this)
 	}
+
+	private readonly handleDeleteButtonClick: (ev: MouseEvent, receiver: HTMLElement) => void = (ev: MouseEvent, receiver: HTMLElement) => {
+		if (this.model.isRepeatingForDeleting) {
+			createAsyncDropdown({
+				lazyButtons: () =>
+					Promise.resolve([
+						{
+							label: "deleteSingleEventRecurrence_action",
+							click: async () => {
+								await this.model.deleteSingle()
+								this.close()
+							},
+						},
+						{
+							label: "deleteAllEventRecurrence_action",
+							click: () => this.confirmDeleteClose(),
+						},
+					]),
+				width: 300,
+			})(ev, receiver)
+		} else {
+			// noinspection JSIgnoredPromiseFromCall
+			this.confirmDeleteClose()
+		}
+	}
+
+	private readonly handleEditButtonClick: (ev: MouseEvent, receiver: HTMLElement) => void = (ev: MouseEvent, receiver: HTMLElement) => {
+		if (this.model.isRepeatingForEditing) {
+			createAsyncDropdown({
+				lazyButtons: () =>
+					Promise.resolve([
+						{
+							label: "updateOneCalendarEvent_action",
+							click: () => {
+								this.model.editSingle()
+								this.close()
+							},
+						},
+						{
+							label: "updateAllCalendarEvents_action",
+							click: () => {
+								this.model.editAll()
+								this.close()
+							},
+						},
+					]),
+				width: 300,
+			})(ev, receiver)
+		} else {
+			// noinspection JSIgnoredPromiseFromCall
+			this.model.editAll()
+			this.close()
+		}
+	}
+	// we handle askForUpdates here to avoid making a request if not necessary
+	private readonly handleSendUpdatesClick: () => void = () =>
+		Dialog.confirm("sendUpdates_msg")
+			.then(() => this.model.sendUpdates())
+			.then(this.close)
 
 	view(): Children {
 		return m(
@@ -118,9 +125,10 @@ export class CalendarEventPopup implements ModalComponent {
 					m(EventPreviewView, {
 						event: this.model.calendarEvent,
 						sanitizedDescription: this.sanitizedDescription,
-						setParticipation: (status) => {
-							console.log("what?", status)
-						},
+						participation:
+							this.model.ownAttendance != null
+								? { status: this.model.ownAttendance, setParticipation: (status) => this.model.setOwnAttendance(status) }
+								: null,
 					}),
 				]),
 			],
@@ -195,7 +203,7 @@ export class CalendarEventPopup implements ModalComponent {
 		}
 		const edit: Shortcut = {
 			key: Keys.E,
-			exec: this.handleEditButtonClick,
+			exec: () => this.handleEditButtonClick(new MouseEvent("click", {}), this.dom!),
 			help: "edit_action",
 		}
 		const sendUpdates: Shortcut = {
@@ -205,7 +213,7 @@ export class CalendarEventPopup implements ModalComponent {
 		}
 		const remove: Shortcut = {
 			key: Keys.DELETE,
-			exec: this.handleDeleteButtonClick,
+			exec: () => this.handleDeleteButtonClick(new MouseEvent("click", {}), this.dom!),
 			help: "delete_action",
 		}
 

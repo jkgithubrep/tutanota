@@ -8,7 +8,7 @@ import { CalendarEventAlarmModel } from "./CalendarEventAlarmModel.js"
 import { CalendarEventWhoModel } from "./CalendarEventWhoModel.js"
 import { RecipientsModel } from "../../../api/main/RecipientsModel.js"
 import { AlarmInfo, User } from "../../../api/entities/sys/TypeRefs.js"
-import { CalendarModel } from "../CalendarModel.js"
+import { CalendarInfo, CalendarModel } from "../CalendarModel.js"
 import { getPasswordStrengthForUser } from "../../../misc/passwords/PasswordUtils.js"
 import { PartialRecipient } from "../../../api/common/recipients/Recipient.js"
 import { LoginController } from "../../../api/main/LoginController.js"
@@ -105,16 +105,18 @@ export async function makeCalendarEventEditModels(
 	const getPasswordStrength = (password: string, recipientInfo: PartialRecipient) =>
 		getPasswordStrengthForUser(password, recipientInfo, mailboxDetail, logins)
 
+	const eventType = getEventType(
+		initialValues,
+		calendars,
+		ownMailAddresses.map(({ address }) => address),
+		user,
+	)
+
 	return {
 		saveModel: new CalendarEventSaveModel(
 			/** in this case, we only want to give the existing event if it actually exists on the server. */
 			initialValues._ownerGroup != null ? createCalendarEvent(initialValues) : null,
-			getEventType(
-				initialValues,
-				calendars,
-				ownMailAddresses.map(({ address }) => address),
-				user,
-			),
+			eventType,
 			logins.getUserController(),
 			distributor,
 			calendarModel,
@@ -125,11 +127,13 @@ export async function makeCalendarEventEditModels(
 			zone,
 			null /** responseTo */,
 			showProgress,
-			uiUpdateCallback,
 		),
 		whenModel: new CalendarEventWhenModel(cleanInitialValues, zone, uiUpdateCallback),
 		whoModel: new CalendarEventWhoModel(
 			cleanInitialValues,
+			eventType,
+			calendars,
+			logins.getUserController(),
 			isNew,
 			ownMailAddresses,
 			recipientsModel,
@@ -152,8 +156,9 @@ export async function makeCalendarEventEditModels(
  */
 export function assembleCalendarEventEditResult(models: CalendarEventEditModels): {
 	eventValues: CalendarEventValues
-	alarms: ReadonlyArray<AlarmInfo>
+	newAlarms: ReadonlyArray<AlarmInfo>
 	sendModels: CalendarEventUpdateNotificationModels
+	calendar: CalendarInfo
 } {
 	const whenResult = models.whenModel.result
 	const whoResult = models.whoModel.result
@@ -181,8 +186,9 @@ export function assembleCalendarEventEditResult(models: CalendarEventEditModels)
 			// reminders
 			alarmInfos: [],
 		},
-		alarms: alarmResult.alarms,
+		newAlarms: alarmResult.alarms,
 		sendModels: whoResult,
+		calendar: whoResult.calendar,
 	}
 }
 

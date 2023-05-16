@@ -24,7 +24,6 @@ import { px, size } from "../../../gui/size.js"
 import { createDropdown } from "../../../gui/base/Dropdown.js"
 import { CalendarEventWhoModel, canModifyGuests, canModifyOwnAttendance } from "../../model/eventeditor/CalendarEventWhoModel.js"
 import { LoginController } from "../../../api/main/LoginController.js"
-import { MailboxDetail } from "../../../mail/model/MailModel.js"
 import { CalendarEventSaveModel } from "../../model/eventeditor/CalendarEventSaveModel.js"
 
 export type AttendeeListEditorAttrs = {
@@ -37,11 +36,9 @@ export type AttendeeListEditorAttrs = {
 	/** these are needed to show suggestions and external passwords. */
 	recipientsSearch: RecipientsSearchModel
 	logins: LoginController
-	mailboxDetail: MailboxDetail
 
 	/** which parts of the editor are writable */
 	disabled: boolean
-	eventType: EventType
 	isSharedCalendar: boolean
 }
 
@@ -123,7 +120,7 @@ export class AttendeeListEditor implements Component<AttendeeListEditorAttrs> {
 	 * @private
 	 */
 	private renderGuests(attrs: AttendeeListEditorAttrs): Children {
-		const { editModel, mailboxDetail, logins } = attrs
+		const { editModel } = attrs
 		const organizer = editModel.organizer
 		const ownAttendee = editModel.ownGuest
 		const ownGuest: Guest | null = ownAttendee && { ...editModel.ownGuest, type: RecipientType.INTERNAL }
@@ -160,7 +157,7 @@ export class AttendeeListEditor implements Component<AttendeeListEditorAttrs> {
 					})
 			: []
 
-		return m("", [guests.map((guest, index) => renderGuest(attrs, guest, index)), externalGuestPasswords])
+		return m("", [guests.map((guest, index) => renderGuest(attrs, attrs.saveModel.eventType, guest, index)), externalGuestPasswords])
 	}
 
 	private renderRevealIcon(address: string): Children {
@@ -196,7 +193,7 @@ function showOrganizerDropdown(editModel: CalendarEventWhoModel, e: MouseEvent) 
 	createDropdown({ lazyButtons, width: 300 })(e, e.target as HTMLElement)
 }
 
-function renderGuest({ editModel, eventType, isSharedCalendar }: AttendeeListEditorAttrs, guest: Guest, index: number): Children {
+function renderGuest({ editModel, isSharedCalendar }: AttendeeListEditorAttrs, eventType: EventType, guest: Guest, index: number): Children {
 	const { address, name, status } = guest
 	const { organizer } = editModel
 	const isOrganizer = organizer != null && organizer.address === editModel.ownGuest?.address

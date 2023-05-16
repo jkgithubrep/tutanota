@@ -31,11 +31,10 @@ import {
 	addDaysForEvent,
 	addDaysForLongEvent,
 	addDaysForRecurringEvent,
-	getDiffInHours,
+	getDiffIn60mIntervals,
 	getEventStart,
 	getMonth,
 	getTimeZone,
-	incrementSequence,
 	isEventBetweenDays,
 	isSameEvent,
 } from "../date/CalendarUtils"
@@ -52,7 +51,7 @@ import { ProgressTracker } from "../../api/main/ProgressTracker"
 import { DeviceConfig } from "../../misc/DeviceConfig"
 import type { EventDragHandlerCallbacks } from "./EventDragHandler"
 import { locator } from "../../api/main/MainLocator.js"
-import { assembleCalendarEventEditResult, assignEventIdentity, CalendarEventEditModels, EventType } from "../model/eventeditor/CalendarEventEditModel.js"
+import { CalendarEventEditModels } from "../model/eventeditor/CalendarEventEditModel.js"
 import { ProgrammingError } from "../../api/common/error/ProgrammingError.js"
 import { getNonOrganizerAttendees } from "./eventpopup/CalendarEventPopup.js"
 import { CalendarEventEditMode } from "./eventeditor/CalendarEventEditDialog.js"
@@ -109,7 +108,7 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 
 	constructor(
 		private readonly logins: LoginController,
-		private readonly createCalendarEventEditModelCallback: CalendarEventEditModelsFactory,
+		private readonly createCalendarEventEditModels: CalendarEventEditModelsFactory,
 		calendarModel: CalendarModel,
 		entityClient: EntityClient,
 		eventController: EventController,
@@ -228,7 +227,7 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 			try {
 				const didUpdate = await this.moveEvent(progenitor, timeToMoveBy)
 
-				if (!didUpdate) {
+				if (didUpdate !== EventSaveResult.Saved) {
 					this._removeTransientEvent(eventClone)
 				}
 			} catch (e) {
@@ -298,7 +297,7 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 			const events = this._eventsForDays.get(day.getTime()) || []
 
 			const sortEvent = (event: CalendarEvent) => {
-				if (isAllDayEvent(event) || getDiffInHours(event.startTime, event.endTime) >= 24) {
+				if (isAllDayEvent(event) || getDiffIn60mIntervals(event.startTime, event.endTime) >= 24) {
 					longEvents.add(event)
 				} else {
 					shortEventsForDay.push(event)
@@ -361,12 +360,8 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 			throw new ProgrammingError("single-instance-rescheduling is not implemented.")
 		}
 
-		const editModels = await this.createCalendarEventEditModelCallback(event)
-		editModels.whenModel.rescheduleEvent(diff)
-		const { eventValues: editedEventValues, alarms, sendModels } = assembleCalendarEventEditResult(editModels)
-
-		const mayIncrement = editModels.saveModel.eventType === EventType.OWN || editModels.saveModel.eventType === EventType.SHARED_RW
-		const editedEvent = assignEventIdentity(editedEventValues, { uid: event.uid, sequence: incrementSequence(event.sequence, mayIncrement) })
+		const editModels = await this.createCalendarEventEditModels(event)
+		editModels.whenModel.rescheduleEvent({ millisecond: diff })
 
 		if (getNonOrganizerAttendees(event).length > 0) {
 			const response = await askIfShouldSendCalendarUpdatesToAttendees()
@@ -378,7 +373,7 @@ export class CalendarViewModel implements EventDragHandlerCallbacks {
 		}
 
 		// Errors are handled in the individual views
-		return await editModels.saveModel.updateExistingEvent(editedEvent, alarms, sendModels)
+		return await editModels.saveModel.updateExistingEvent(editModels)
 	}
 
 	_addOrUpdateEvent(calendarInfo: CalendarInfo | null, event: CalendarEvent) {

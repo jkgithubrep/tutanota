@@ -94,7 +94,6 @@ import { AlarmScheduler } from "../../calendar/date/AlarmScheduler.js"
 import { CalendarEventEditModels, makeCalendarEventEditModels } from "../../calendar/model/eventeditor/CalendarEventEditModel.js"
 import { getTimeZone } from "../../calendar/date/CalendarUtils.js"
 import { calendarUpdateDistributor } from "../../calendar/date/CalendarUpdateDistributor.js"
-import { CalendarEventEditMode } from "../../calendar/view/eventeditor/CalendarEventEditDialog.js"
 
 assertMainOrNode()
 
@@ -191,7 +190,7 @@ class MainLocator {
 			async (event: CalendarEvent) => {
 				const mailboxDetail = await this.mailModel.getUserMailboxDetails()
 				const mailboxProperties = await this.mailModel.getMailboxProperties(mailboxDetail.mailboxGroupRoot)
-				return await this.calendarEventEditModels(CalendarEventEditMode.All, event, mailboxDetail, mailboxProperties)
+				return await this.calendarEventEditModels(event, mailboxDetail, mailboxProperties)
 			},
 			this.calendarModel,
 			this.entityClient,
@@ -223,7 +222,6 @@ class MainLocator {
 	}
 
 	async calendarEventEditModels(
-		mode: CalendarEventEditMode,
 		event: Partial<CalendarEvent>,
 		mailboxDetail: MailboxDetail,
 		mailboxProperties: MailboxProperties,

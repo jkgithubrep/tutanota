@@ -1,4 +1,4 @@
-import { CalendarEvent } from "../../../api/entities/tutanota/TypeRefs.js"
+import { CalendarEvent, CalendarEventAttendee } from "../../../api/entities/tutanota/TypeRefs.js"
 import { CalendarEventEditModels, EventType } from "../../model/eventeditor/CalendarEventEditModel.js"
 import { getNonOrganizerAttendees } from "./CalendarEventPopup.js"
 import { calendarEventHasMoreThanOneOccurrencesLeft } from "../../date/CalendarUtils.js"
@@ -6,7 +6,9 @@ import { EventSaveResult } from "../../model/eventeditor/CalendarEventSaveModel.
 import { NotFoundError } from "../../../api/common/error/RestError.js"
 import { CalendarModel } from "../../model/CalendarModel.js"
 import { CalendarEventEditMode, showExistingCalendarEventEditDialog } from "../eventeditor/CalendarEventEditDialog.js"
-import { resolveCalendarEventProgenitor } from "../CalendarView.js"
+import { ProgrammingError } from "../../../api/common/error/ProgrammingError.js"
+import { CalendarAttendeeStatus } from "../../../api/common/TutanotaConstants.js"
+import { sendResponse } from "../../../mail/view/EventBanner.js"
 
 /**
  * makes decisions about which operations are available from the popup and knows how to implement them depending on the event's type.
@@ -15,16 +17,21 @@ export class CalendarEventPopupViewModel {
 	readonly canEdit: boolean
 	readonly canDelete: boolean
 	readonly canSendUpdates: boolean
-	/** for editing, an event that has only one non-deleted instance is still considered repeating. */
-	readonly isRepeatingForEditing: boolean
-	/** for deleting, an event that has only one non-deleted instance behaves as if it wasn't repeating */
+	/** for deleting, an event that has only one non-deleted instance behaves as if it wasn't repeating
+	 * because deleting the last instance is the same as deleting the whole event from the pov of the user.
+	 */
 	readonly isRepeatingForDeleting: boolean
+	/** for editing, an event that has only one non-deleted instance is still considered repeating
+	 * because we might reschedule that instance and then unexclude some deleted instances.
+	 */
+	readonly isRepeatingForEditing: boolean
 
 	constructor(
 		readonly calendarEvent: Readonly<CalendarEvent>,
 		private readonly calendarModel: CalendarModel,
 		private readonly eventType: EventType,
 		private readonly hasBusinessFeature: boolean,
+		readonly ownAttendance: CalendarAttendeeStatus | null,
 		private readonly editModelsFactory: (mode: CalendarEventEditMode) => Promise<CalendarEventEditModels>,
 	) {
 		if (this.calendarEvent._ownerGroup == null) {
@@ -37,23 +44,33 @@ export class CalendarEventPopupViewModel {
 			this.canSendUpdates = hasBusinessFeature && this.eventType === EventType.OWN && getNonOrganizerAttendees(calendarEvent).length > 0
 		}
 
-		this.isRepeatingForEditing = calendarEvent.repeatRule != null
+		// we do not edit single instances yet
+		this.isRepeatingForEditing = false // calendarEvent.repeatRule != null
 		this.isRepeatingForDeleting = calendarEventHasMoreThanOneOccurrencesLeft(calendarEvent)
 	}
 
 	/**
-	 * add an exclusion for this event instance start time on the original event.
-	 *  if this is a rescheduled instance, we just delete the event because the progenitor already
-	 *  has an exclusion for this time.
+	 * add an exclusion for this event instances start time on the original event.
+	 * if this is a rescheduled instance, we will just delete the event because the progenitor already
+	 * has an exclusion for this time.
 	 * */
 	async deleteSingle() {
-		console.log("deletesingle")
+		try {
+			// passing "all" because this is actually an update to the progenitor
+			const editModels = await this.editModelsFactory(CalendarEventEditMode.All)
+			await editModels.whenModel.excludeDate(this.calendarEvent.startTime)
+			await editModels.saveModel.updateExistingEvent(editModels)
+		} catch (e) {
+			if (!(e instanceof NotFoundError)) {
+				throw e
+			}
+		}
 	}
 
 	async deleteAll(): Promise<void> {
 		try {
-			// FIXME: send cancellations.
-			return await this.calendarModel.deleteEvent(await resolveCalendarEventProgenitor(this.calendarEvent))
+			const editModels = await this.editModelsFactory(CalendarEventEditMode.All)
+			await editModels.saveModel.deleteEvent(editModels)
 		} catch (e) {
 			if (!(e instanceof NotFoundError)) {
 				throw e
@@ -62,13 +79,17 @@ export class CalendarEventPopupViewModel {
 	}
 
 	async editSingle() {
-		console.log("editsingle")
+		throw new ProgrammingError("not implemented")
 	}
 
 	async editAll() {
 		const editModels = await this.editModelsFactory(CalendarEventEditMode.All)
 		try {
-			return await showExistingCalendarEventEditDialog(editModels)
+			return await showExistingCalendarEventEditDialog(editModels, {
+				uid: this.calendarEvent.uid,
+				sequence: this.calendarEvent.sequence,
+				recurrenceId: null,
+			})
 		} catch (err) {
 			if (err instanceof NotFoundError) {
 				console.log("calendar event not found when clicking on the event")
@@ -87,5 +108,9 @@ export class CalendarEventPopupViewModel {
 		} finally {
 			saveModel.shouldSendUpdates = false
 		}
+	}
+
+	async setOwnAttendance(status: CalendarAttendeeStatus): Promise<void> {
+		sendResponse(this.calendarEvent, this.calendarEvent.organizer.address, status)
 	}
 }
