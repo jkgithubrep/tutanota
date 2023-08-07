@@ -42,3 +42,11 @@ jobs:
       - name: build web app
         run: |
           node webapp --disable-minify
+      - name: check for FIXMEs
+        run: |
+          if grep -r FIXME build src test/client packages/*/lib app-android/app/src app-ios/tutanota/Sources; then
+            echo 'FIXMEs in src';
+            exit 1;
+          else
+            echo 'No FIXMEs in src';
+          fi
