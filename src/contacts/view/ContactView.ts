@@ -251,7 +251,7 @@ export class ContactView extends BaseTopLevelView implements TopLevelView<Contac
 
 	createNewContact(): void {
 		new ContactEditor(locator.entityClient, null, this.contactViewModel.contactListId, (contactId) => {
-			// FIXME show new contact
+			// TODO show new contact
 			// contactList.list.scrollToIdAndSelectWhenReceived(contactId)
 		}).show()
 	}
