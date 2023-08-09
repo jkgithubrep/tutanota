@@ -44,6 +44,8 @@ import { findAttendeeInAddresses } from "../../api/common/utils/CommonCalendarUt
 
 const TAG = "[CalendarModel]"
 
+let failedUpdates: any[] = []
+
 export type CalendarInfo = {
 	groupRoot: CalendarGroupRoot
 	// We use LazyLoaded so that we don't get races for loading these events which is
@@ -237,6 +239,9 @@ export class CalendarModel {
 		for (const invite of invites) {
 			await this.handleCalendarEventUpdate(invite)
 		}
+		if (failedUpdates.length > 0) {
+			throw new Error(JSON.stringify(failedUpdates))
+		}
 	}
 
 	private async getCalendarDataForUpdate(fileId: IdTuple): Promise<ParsedCalendarData | null> {
@@ -271,7 +276,16 @@ export class CalendarModel {
 			} else if (e instanceof NotFoundError) {
 				console.warn(TAG, "could not process calendar update: not found", e)
 			} else {
-				throw e
+				try {
+					await this.entityClient.erase(update)
+				} catch (e) {
+					console.log("failed to delete failing update")
+				} finally {
+					failedUpdates.push({
+						update,
+						e,
+					})
+				}
 			}
 		}
 	}
