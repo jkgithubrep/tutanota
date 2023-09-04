@@ -8,7 +8,7 @@ import {
 	createEncryptedMailAddress,
 } from "../../../src/api/entities/tutanota/TypeRefs.js"
 import { incrementByRepeatPeriod } from "../../../src/calendar/date/CalendarUtils.js"
-import { clone, downcast, neverNull, noOp } from "@tutao/tutanota-utils"
+import { downcast, neverNull, noOp } from "@tutao/tutanota-utils"
 import { CalendarModel } from "../../../src/calendar/model/CalendarModel.js"
 import { CalendarAttendeeStatus, CalendarMethod, RepeatPeriod } from "../../../src/api/common/TutanotaConstants.js"
 import { DateTime } from "luxon"
@@ -28,7 +28,7 @@ import { CalendarEventProgenitor, CalendarFacade } from "../../../src/api/worker
 import { verify } from "@tutao/tutanota-test-utils"
 import type { WorkerClient } from "../../../src/api/main/WorkerClient.js"
 import { FileController } from "../../../src/file/FileController.js"
-import { func, matchers, when } from "testdouble"
+import { func, matchers, object, when } from "testdouble"
 
 o.spec("CalendarModel", function () {
 	o.spec("incrementByRepeatPeriod", function () {
@@ -642,10 +642,7 @@ function makeLoginController(props: Partial<UserController> = {}): LoginControll
 }
 
 function makeAlarmScheduler(): AlarmScheduler {
-	return {
-		scheduleAlarm: func<AlarmScheduler["scheduleAlarm"]>(),
-		cancelAlarm: func<AlarmScheduler["cancelAlarm"]>(),
-	}
+	return object()
 }
 
 function makeMailModel(): MailModel {

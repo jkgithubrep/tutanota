@@ -721,10 +721,10 @@ class MainLocator {
 	})
 
 	private alarmScheduler: () => Promise<AlarmScheduler> = lazyMemoized(async () => {
-		const { AlarmSchedulerImpl } = await import("../../calendar/date/AlarmScheduler")
+		const { AlarmScheduler } = await import("../../calendar/date/AlarmScheduler")
 		const { DefaultDateProvider } = await import("../../calendar/date/CalendarUtils")
 		const dateProvider = new DefaultDateProvider()
-		return new AlarmSchedulerImpl(dateProvider, await this.scheduler())
+		return new AlarmScheduler(dateProvider, await this.scheduler())
 	})
 
 	private async scheduler(): Promise<SchedulerImpl> {

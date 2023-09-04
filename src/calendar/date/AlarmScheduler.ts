@@ -14,31 +14,19 @@ type EventInfo = {
 	summary: string
 }
 
-export interface AlarmScheduler {
-	scheduleAlarm(event: EventInfo, alarmInfo: AlarmInfo, repeatRule: RepeatRule | null, notificationSender: NotificationSender): void
+export class AlarmScheduler {
+	private readonly scheduledNotifications: Map<string, ScheduledTimeoutId> = new Map()
 
-	cancelAlarm(alarmIdentifier: string): void
-}
-
-export class AlarmSchedulerImpl implements AlarmScheduler {
-	readonly _scheduledNotifications: Map<string, ScheduledTimeoutId>
-	readonly _scheduler: Scheduler
-	readonly _dateProvider: DateProvider
-
-	constructor(dateProvider: DateProvider, scheduler: Scheduler) {
-		this._dateProvider = dateProvider
-		this._scheduledNotifications = new Map()
-		this._scheduler = scheduler
-	}
+	constructor(private readonly dateProvider: DateProvider, private readonly scheduler: Scheduler) {}
 
 	scheduleAlarm(event: EventInfo, alarmInfo: AlarmInfo, repeatRule: RepeatRule | null, notificationSender: NotificationSender): void {
-		const localZone = this._dateProvider.timeZone()
+		const localZone = this.dateProvider.timeZone()
 
 		if (repeatRule) {
 			let repeatTimeZone = getValidTimeZone(repeatRule.timeZone, localZone)
 			let calculationLocalZone = getValidTimeZone(localZone)
 			const nextOccurrence = findNextAlarmOccurrence(
-				new Date(this._dateProvider.now()),
+				new Date(this.dateProvider.now()),
 				repeatTimeZone,
 				event.startTime,
 				event.endTime,
@@ -52,8 +40,8 @@ export class AlarmSchedulerImpl implements AlarmScheduler {
 			)
 
 			if (nextOccurrence) {
-				this._scheduleAction(alarmInfo.alarmIdentifier, nextOccurrence.alarmTime, () => {
-					this._sendNotification(nextOccurrence.eventTime, event.summary, notificationSender)
+				this.scheduleAction(alarmInfo.alarmIdentifier, nextOccurrence.alarmTime, () => {
+					this.sendNotification(nextOccurrence.eventTime, event.summary, notificationSender)
 
 					// Schedule next occurrence
 					this.scheduleAlarm(event, alarmInfo, repeatRule, notificationSender)
@@ -62,9 +50,9 @@ export class AlarmSchedulerImpl implements AlarmScheduler {
 		} else {
 			const eventStart = getEventStartByTimes(event.startTime, event.endTime, localZone)
 
-			if (eventStart.getTime() > this._dateProvider.now()) {
-				this._scheduleAction(alarmInfo.alarmIdentifier, calculateAlarmTime(eventStart, downcast(alarmInfo.trigger)), () =>
-					this._sendNotification(eventStart, event.summary, notificationSender),
+			if (eventStart.getTime() > this.dateProvider.now()) {
+				this.scheduleAction(alarmInfo.alarmIdentifier, calculateAlarmTime(eventStart, downcast(alarmInfo.trigger)), () =>
+					this.sendNotification(eventStart, event.summary, notificationSender),
 				)
 			}
 		}
@@ -72,27 +60,27 @@ export class AlarmSchedulerImpl implements AlarmScheduler {
 
 	cancelAlarm(alarmIdentifier: string) {
 		// try to cancel single first
-		this._cancelOccurrence(alarmIdentifier)
+		this.cancelOccurrence(alarmIdentifier)
 	}
 
-	_cancelOccurrence(alarmIdentifier: string) {
-		const timeoutId = this._scheduledNotifications.get(alarmIdentifier)
+	private cancelOccurrence(alarmIdentifier: string) {
+		const timeoutId = this.scheduledNotifications.get(alarmIdentifier)
 
 		if (timeoutId != null) {
-			this._scheduler.unscheduleTimeout(timeoutId)
+			this.scheduler.unscheduleTimeout(timeoutId)
 		}
 	}
 
-	_scheduleAction(identifier: string, atTime: Date, action: Thunk) {
-		const scheduledId = this._scheduler.scheduleAt(action, atTime)
+	private scheduleAction(identifier: string, atTime: Date, action: Thunk) {
+		const scheduledId = this.scheduler.scheduleAt(action, atTime)
 
-		this._scheduledNotifications.set(identifier, scheduledId)
+		this.scheduledNotifications.set(identifier, scheduledId)
 	}
 
-	_sendNotification(eventTime: Date, summary: string, notificationSender: NotificationSender): void {
+	private sendNotification(eventTime: Date, summary: string, notificationSender: NotificationSender): void {
 		let dateString: string
 
-		if (isSameDay(eventTime, new Date(this._dateProvider.now()))) {
+		if (isSameDay(eventTime, new Date(this.dateProvider.now()))) {
 			dateString = formatTime(eventTime)
 		} else {
 			dateString = formatDateWithWeekdayAndTime(eventTime)

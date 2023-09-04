@@ -11,6 +11,10 @@ import { DesktopAlarmStorage } from "../../../../src/desktop/sse/DesktopAlarmSto
 import { DesktopNativeCryptoFacade } from "../../../../src/desktop/DesktopNativeCryptoFacade.js"
 import { assertThrows, spy } from "@tutao/tutanota-test-utils"
 import { EncryptedAlarmNotification } from "../../../../src/native/common/EncryptedAlarmNotification.js"
+import { matchers, object, verify } from "testdouble"
+import { AlarmInfo, RepeatRule } from "../../../../src/api/entities/sys/TypeRefs.js"
+
+const { anything, captor } = matchers
 
 const oldTimezone = process.env.TZ
 
@@ -39,10 +43,7 @@ o.spec("DesktopAlarmSchedulerTest", function () {
 	}
 
 	function makeAlarmScheduler(): AlarmScheduler {
-		return {
-			scheduleAlarm: spy(),
-			cancelAlarm: spy(),
-		}
+		return object()
 	}
 
 	const standardMocks = () => {
@@ -86,7 +87,7 @@ o.spec("DesktopAlarmSchedulerTest", function () {
 
 			o(alarmStorageMock.storeAlarm.callCount).equals(0)
 			o(notifierMock.submitGroupedNotification.callCount).equals(0)
-			o(alarmScheduler.scheduleAlarm.callCount).equals(0)
+			verify(alarmScheduler.scheduleAlarm(anything(), anything(), anything(), anything()), { times: 0 })
 		})
 
 		o("some alarms", async function () {
@@ -109,9 +110,19 @@ o.spec("DesktopAlarmSchedulerTest", function () {
 			await scheduler.rescheduleAll()
 
 			o(alarmStorageMock.storeAlarm.callCount).equals(0)
-			o(alarmScheduler.scheduleAlarm.calls.map((c) => c.slice(0, -1))).deepEquals([
-				[{ startTime: an.eventStart, endTime: an.eventEnd, summary: an.summary }, an.alarmInfo, an.repeatRule],
-			])
+			verify(
+				alarmScheduler.scheduleAlarm(
+					{
+						startTime: an.eventStart,
+						endTime: an.eventEnd,
+						summary: an.summary,
+					},
+					an.alarmInfo as AlarmInfo,
+					an.repeatRule as RepeatRule,
+					anything(),
+				),
+				{ times: 1 },
+			)
 		})
 	})
 
@@ -148,15 +159,35 @@ o.spec("DesktopAlarmSchedulerTest", function () {
 			// @ts-ignore
 			await scheduler.handleAlarmNotification(an2)
 
-			// We don't want the callback argument
-			o(alarmScheduler.scheduleAlarm.calls.map((c) => c.slice(0, -1))).deepEquals([
-				[{ startTime: an1.eventStart, endTime: an1.eventEnd, summary: an1.summary }, an1.alarmInfo, an1.repeatRule],
-				[{ startTime: an2.eventStart, endTime: an2.eventEnd, summary: an2.summary }, an2.alarmInfo, an2.repeatRule],
-			])
+			verify(
+				alarmScheduler.scheduleAlarm(
+					{
+						startTime: an1.eventStart,
+						endTime: an1.eventEnd,
+						summary: an1.summary,
+					},
+					an1.alarmInfo as AlarmInfo,
+					an1.repeatRule as RepeatRule,
+					anything(),
+				),
+			)
+
+			verify(
+				alarmScheduler.scheduleAlarm(
+					{
+						startTime: an2.eventStart,
+						endTime: an2.eventEnd,
+						summary: an2.summary,
+					},
+					an2.alarmInfo as AlarmInfo,
+					an2.repeatRule as RepeatRule,
+					anything(),
+				),
+			)
 
 			// @ts-ignore
 			await scheduler.handleAlarmNotification(an3)
-			o(alarmScheduler.cancelAlarm.calls).deepEquals([[an3.alarmInfo.alarmIdentifier]])
+			verify(alarmScheduler.cancelAlarm(anything()), { times: 1 })
 		})
 
 		o("notification is shown and calendar is opened when it's clicked", async function () {
@@ -179,10 +210,11 @@ o.spec("DesktopAlarmSchedulerTest", function () {
 			await scheduler.handleAlarmNotification(an1)
 			o(notifierMock.submitGroupedNotification.callCount).equals(0)
 
-			const cb = lastThrow(alarmScheduler.scheduleAlarm.calls[0])
+			const cbCaptor = captor()
+			verify(alarmScheduler.scheduleAlarm(anything(), anything(), anything(), cbCaptor.capture()), { times: 1 })
 			const title = "title"
 			const body = "body"
-			cb(title, body)
+			cbCaptor.value(title, body)
 
 			o(notifierMock.submitGroupedNotification.calls.map((c) => c.slice(0, -1))).deepEquals([[title, body, an1.alarmInfo.alarmIdentifier]])
 			o(wmMock.openCalendar.callCount).equals(0)
