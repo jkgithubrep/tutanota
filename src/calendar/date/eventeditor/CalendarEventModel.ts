@@ -54,7 +54,7 @@
  *     * etc.
  */
 
-import { AccountType, AlarmInterval } from "../../../api/common/TutanotaConstants.js"
+import { AccountType, LegacyAlarmTrigger } from "../../../api/common/TutanotaConstants.js"
 import {
 	CalendarEvent,
 	CalendarEventAttendee,
@@ -535,9 +535,9 @@ export function assignEventIdentity(values: CalendarEventValues, identity: Requi
 	})
 }
 
-async function resolveAlarmsForEvent(alarms: CalendarEvent["alarmInfos"], calendarModel: CalendarModel, user: User): Promise<Array<AlarmInterval>> {
+async function resolveAlarmsForEvent(alarms: CalendarEvent["alarmInfos"], calendarModel: CalendarModel, user: User): Promise<Array<LegacyAlarmTrigger>> {
 	const alarmInfos = await calendarModel.loadAlarms(alarms, user)
-	return alarmInfos.map(({ alarmInfo }) => alarmInfo.trigger as AlarmInterval)
+	return alarmInfos.map(({ alarmInfo }) => alarmInfo.trigger as LegacyAlarmTrigger)
 }
 
 function cleanupInitialValuesForEditing(initialValues: Partial<CalendarEvent>): CalendarEvent {

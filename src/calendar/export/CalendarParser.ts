@@ -1,4 +1,4 @@
-import { DAY_IN_MILLIS, downcast, filterInt, neverNull, Require } from "@tutao/tutanota-utils"
+import { DAY_IN_MILLIS, downcast, filterInt, isNotNull, neverNull, Require } from "@tutao/tutanota-utils"
 import { DateTime, IANAZone } from "luxon"
 import type { CalendarEvent } from "../../api/entities/tutanota/TypeRefs.js"
 import { CalendarEventAttendee, createCalendarEvent, createCalendarEventAttendee, createEncryptedMailAddress } from "../../api/entities/tutanota/TypeRefs.js"
@@ -21,7 +21,7 @@ import {
 import WindowsZones from "./WindowsZones"
 import type { ParsedCalendarData } from "./CalendarImporter"
 import { isMailAddress } from "../../misc/FormatValidator"
-import { AlarmInterval, CalendarAttendeeStatus, CalendarMethod, EndType, RepeatPeriod, reverse } from "../../api/common/TutanotaConstants"
+import { AlarmTrigger, CalendarAttendeeStatus, CalendarMethod, EndType, RepeatPeriod, reverse } from "../../api/common/TutanotaConstants"
 
 function parseDateString(dateString: string): {
 	year: number
@@ -266,29 +266,29 @@ function parseAlarm(alarmObject: ICalObject, event: CalendarEvent): AlarmInfo | 
 	}
 	const triggerValue = triggerProp.value
 	if (typeof triggerValue !== "string") throw new ParserError("expected TRIGGER property to be a string: " + JSON.stringify(triggerProp))
-	let trigger: AlarmInterval
+	let trigger: string | null = null
 
-	// Absolute time
+	// we currently don't support absolute time, we will take the next smallest default relative value.
 	if (triggerValue.endsWith("Z")) {
 		const triggerTime = parseTime(triggerValue).date
 		const tillEvent = event.startTime.getTime() - triggerTime.getTime()
 
 		if (tillEvent >= DAY_IN_MILLIS * 7) {
-			trigger = AlarmInterval.ONE_WEEK
+			trigger = AlarmTrigger.ONE_WEEK
 		} else if (tillEvent >= DAY_IN_MILLIS * 3) {
-			trigger = AlarmInterval.THREE_DAYS
+			trigger = AlarmTrigger.THREE_DAYS
 		} else if (tillEvent >= DAY_IN_MILLIS * 2) {
-			trigger = AlarmInterval.TWO_DAYS
+			trigger = AlarmTrigger.TWO_DAYS
 		} else if (tillEvent >= DAY_IN_MILLIS) {
-			trigger = AlarmInterval.ONE_DAY
+			trigger = AlarmTrigger.ONE_DAY
 		} else if (tillEvent >= 60 * 60 * 1000) {
-			trigger = AlarmInterval.ONE_HOUR
+			trigger = AlarmTrigger.ONE_HOUR
 		} else if (tillEvent >= 30 * 60 * 1000) {
-			trigger = AlarmInterval.THIRTY_MINUTES
+			trigger = AlarmTrigger.THIRTY_MINUTES
 		} else if (tillEvent >= 10 * 60 * 1000) {
-			trigger = AlarmInterval.TEN_MINUTES
+			trigger = AlarmTrigger.TEN_MINUTES
 		} else if (tillEvent >= 0) {
-			trigger = AlarmInterval.FIVE_MINUTES
+			trigger = AlarmTrigger.FIVE_MINUTES
 		} else {
 			return null
 		}
@@ -296,43 +296,55 @@ function parseAlarm(alarmObject: ICalObject, event: CalendarEvent): AlarmInfo | 
 		const duration = parseDuration(triggerValue)
 
 		if (duration.positive) {
+			// don't support triggering an alarm after the fact atm.
 			return null
 		} else {
-			if (duration.week) {
-				trigger = AlarmInterval.ONE_WEEK
-			} else if (duration.day) {
-				if (duration.day >= 3) {
-					trigger = AlarmInterval.THREE_DAYS
-				} else if (duration.day === 2) {
-					trigger = AlarmInterval.TWO_DAYS
-				} else {
-					trigger = AlarmInterval.ONE_DAY
-				}
-			} else if (duration.hour) {
-				if (duration.hour > 1) {
-					trigger = AlarmInterval.ONE_DAY
-				} else {
-					trigger = AlarmInterval.ONE_HOUR
-				}
-			} else if (duration.minute) {
-				if (duration.minute > 30) {
-					trigger = AlarmInterval.ONE_HOUR
-				} else if (duration.minute > 10) {
-					trigger = AlarmInterval.THIRTY_MINUTES
-				} else if (duration.minute > 5) {
-					trigger = AlarmInterval.TEN_MINUTES
-				} else {
-					trigger = AlarmInterval.FIVE_MINUTES
-				}
-			} else {
-				trigger = AlarmInterval.THREE_DAYS
-			}
+			trigger = normalizeTrigger(duration)
 		}
 	}
 
 	return Object.assign(createAlarmInfo(), {
 		trigger,
 	})
+}
+
+/** re-serialize the trigger to conform to the spec */
+export function normalizeTrigger(duration: Duration): string {
+	let sign = duration.positive ? "+" : "-"
+	if (duration.week) {
+		// according to the spec, other components are not given if weeks are
+		return `${sign}P${duration.week}W`
+	}
+
+	let addedNonzeroComponent = false
+	const parts = [sign, "P"]
+	if (duration.day > 0) {
+		addedNonzeroComponent = true
+		parts.push(`${duration.day}D`)
+	}
+
+	if (duration.hour + duration.minute + duration.second > 0 || duration.day === 0) {
+		// we'll have a time component if any of hour, minute or second are positive or if the whole thing is zero.
+		// to represent the alarm at event start time (0s before event)
+		parts.push("T")
+	}
+
+	if (duration.hour > 0) {
+		addedNonzeroComponent = true
+		parts.push(`${duration.hour}H`)
+	}
+
+	if (duration.minute > 0) {
+		addedNonzeroComponent = true
+		parts.push(`${duration.minute}M`)
+	}
+
+	if (duration.second > 0 || !addedNonzeroComponent) {
+		// either there are actually seconds or we did not add any of days, hour, minute -> zero length duration
+		parts.push(`${duration.second}S`)
+	}
+
+	return parts.filter(isNotNull).join("")
 }
 
 export function parseRrule(rruleProp: Property, tzId: string | null): RepeatRule {
@@ -395,6 +407,9 @@ export function parseRecurrenceId(recurrenceIdProp: Property, tzId: string | nul
 }
 
 function parseEventDuration(durationProp: Property, event: CalendarEvent): void {
+	// according to the spec, we have to take discontinuities into account when calculating
+	// offsets from durations, which this does not do at the moment.
+	// https://icalendar.org/iCalendar-RFC-5545/3-3-6-duration.html
 	if (typeof durationProp.value !== "string") throw new ParserError("DURATION value is not a string")
 	const duration = parseDuration(durationProp.value)
 	let durationInMillis = 0
@@ -636,10 +651,11 @@ export function parseCalendarEvents(icalObject: ICalObject, zone: string): Parse
 
 type Duration = {
 	positive: boolean
-	day?: number
-	week?: number
-	hour?: number
-	minute?: number
+	day: number
+	week: number
+	hour: number
+	minute: number
+	second: number
 }
 
 function icalFrequencyToRepeatPeriod(value: string): RepeatPeriod {
@@ -814,9 +830,9 @@ const hourDurationParser: Parser<[number, string, [number, string, [number, stri
 )
 type TimeDuration = {
 	type: "time"
-	hour?: number
-	minute?: number
-	second?: number
+	hour: number
+	minute: number
+	second: number
 }
 type DateDuration = {
 	type: "date"
@@ -829,9 +845,11 @@ type WeekDuration = {
 }
 const durationTimeParser: Parser<TimeDuration> = mapParser(
 	combineParsers(makeCharacterParser("T"), makeEitherParser(hourDurationParser, makeEitherParser(minuteDurationParser, secondDurationParser))),
-	([t, value]) => {
+	([_t, value]) => {
 		let minuteTuple, secondTuple
-		let hour, minute, second
+		let hour = 0,
+			minute = 0,
+			second = 0
 
 		if (value[1] === "H") {
 			hour = value[0]
@@ -873,17 +891,34 @@ const durationDateParser: Parser<DateDuration> = mapParser(combineParsers(durati
 		time: parsed[1],
 	} as DateDuration
 })
-const durationParser = mapParser(
+
+/**
+dur-value  = (["+"] / "-") "P" (dur-date / dur-time / dur-week)
+
+dur-date   = dur-day [dur-time]
+dur-time   = "T" (dur-hour / dur-minute / dur-second)
+dur-week   = 1*DIGIT "W"
+dur-hour   = 1*DIGIT "H" [dur-minute]
+dur-minute = 1*DIGIT "M" [dur-second]
+dur-second = 1*DIGIT "S"
+dur-day    = 1*DIGIT "D"
+ */
+const durationParser: (i: StringIterator) => Duration = mapParser(
 	combineParsers(
 		maybeParse(makeEitherParser(makeCharacterParser("+"), makeCharacterParser("-"))),
 		makeCharacterParser("P"),
 		maybeParse(makeEitherParser(durationDateParser, makeEitherParser(durationTimeParser, durationWeekParser))),
 	),
-	([sign, p, durationValue]) => {
+	([sign, _p, durationValue]) => {
 		const positive = sign !== "-"
-		let day, timeDuration, week, hour, minute
+		let day = 0,
+			timeDuration: TimeDuration | null = null,
+			week = 0,
+			hour = 0,
+			minute = 0,
+			second = 0
 
-		if (durationValue) {
+		if (durationValue != null) {
 			switch (durationValue.type) {
 				case "date":
 					day = durationValue.day
@@ -898,22 +933,27 @@ const durationParser = mapParser(
 					week = durationValue.week
 			}
 
-			if (timeDuration) {
+			if (timeDuration != null) {
 				hour = timeDuration.hour
 				minute = timeDuration.minute
+				second = timeDuration.second
 			}
 		}
 
 		return {
 			positive,
-			day,
-			hour,
-			minute,
-			week,
+			day: day ?? 0,
+			hour: hour ?? 0,
+			minute: minute ?? 0,
+			second: second ?? 0,
+			week: week ?? 0,
 		}
 	},
 )
 
+/**
+ * https://www.kanzaki.com/docs/ical/duration-t.html
+ */
 export function parseDuration(value: string): Duration {
 	const iterator = new StringIterator(value)
 	const duration = durationParser(iterator)

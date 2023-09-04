@@ -511,7 +511,8 @@ export const enum EndType {
 export const defaultCalendarColor = "2196f3"
 
 // keep non-const for iteration/filtering
-export enum AlarmInterval {
+// FIXME: when to remove?
+export enum LegacyAlarmTrigger {
 	FIVE_MINUTES = "5M",
 	TEN_MINUTES = "10M",
 	THIRTY_MINUTES = "30M",
@@ -520,6 +521,18 @@ export enum AlarmInterval {
 	TWO_DAYS = "2D",
 	THREE_DAYS = "3D",
 	ONE_WEEK = "1W",
+}
+
+// keep non-const for iteration/filtering
+export enum AlarmTrigger {
+	FIVE_MINUTES = "-PT5M",
+	TEN_MINUTES = "-PT10M",
+	THIRTY_MINUTES = "-PT30M",
+	ONE_HOUR = "-PT1H",
+	ONE_DAY = "-P1D",
+	TWO_DAYS = "-P2D",
+	THREE_DAYS = "-P3D",
+	ONE_WEEK = "-P1W",
 }
 
 export const enum EventTextTimeOption {

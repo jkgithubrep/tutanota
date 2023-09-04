@@ -1,5 +1,5 @@
 import type { CalendarAttendeeStatus, CalendarMethod } from "../../api/common/TutanotaConstants"
-import { AlarmInterval, assertEnumValue, EndType, RepeatPeriod, SECOND_MS } from "../../api/common/TutanotaConstants"
+import { AlarmTrigger, assertEnumValue, EndType, LegacyAlarmTrigger, RepeatPeriod, SECOND_MS } from "../../api/common/TutanotaConstants"
 import {
 	assertNotNull,
 	downcast,
@@ -222,34 +222,35 @@ function makeInvitationCalendar(versionNumber: string, event: CalendarEvent, met
 	return wrapIntoCalendar(versionNumber, method, eventSerialized)
 }
 
-function serializeTrigger(alarmInterval: AlarmInterval): string {
+function serializeTrigger(alarmInterval: LegacyAlarmTrigger): string {
 	switch (alarmInterval) {
-		case AlarmInterval.FIVE_MINUTES:
-			return "-PT05M"
+		case LegacyAlarmTrigger.FIVE_MINUTES:
+			return AlarmTrigger.FIVE_MINUTES
 
-		case AlarmInterval.TEN_MINUTES:
-			return "-PT10M"
+		case LegacyAlarmTrigger.TEN_MINUTES:
+			return AlarmTrigger.TEN_MINUTES
 
-		case AlarmInterval.THIRTY_MINUTES:
-			return "-PT30M"
+		case LegacyAlarmTrigger.THIRTY_MINUTES:
+			return AlarmTrigger.THIRTY_MINUTES
 
-		case AlarmInterval.ONE_HOUR:
-			return "-PT01H"
+		case LegacyAlarmTrigger.ONE_HOUR:
+			return AlarmTrigger.ONE_HOUR
 
-		case AlarmInterval.ONE_DAY:
-			return "-P1D"
+		case LegacyAlarmTrigger.ONE_DAY:
+			return AlarmTrigger.ONE_DAY
 
-		case AlarmInterval.TWO_DAYS:
-			return "-P2D"
+		case LegacyAlarmTrigger.TWO_DAYS:
+			return AlarmTrigger.TWO_DAYS
 
-		case AlarmInterval.THREE_DAYS:
-			return "-P3D"
+		case LegacyAlarmTrigger.THREE_DAYS:
+			return AlarmTrigger.THREE_DAYS
 
-		case AlarmInterval.ONE_WEEK:
-			return "-P1W"
+		case LegacyAlarmTrigger.ONE_WEEK:
+			return AlarmTrigger.ONE_WEEK
 
 		default:
-			throw new Error("unknown alarm interval: " + alarmInterval)
+			// fixme: assume we have a valid trigger here. should be ok?
+			return alarmInterval
 	}
 }
 

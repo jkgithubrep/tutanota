@@ -18,7 +18,7 @@ import {
 } from "@tutao/tutanota-utils"
 import {
 	AccountType,
-	AlarmInterval,
+	LegacyAlarmTrigger,
 	CalendarAttendeeStatus,
 	defaultCalendarColor,
 	EndType,
@@ -154,53 +154,54 @@ export function getStartOfNextDayWithZone(date: Date, zone: string): Date {
 	return DateTime.fromJSDate(date, { zone }).set({ hour: 0, minute: 0, second: 0, millisecond: 0 }).plus({ day: 1 }).toJSDate()
 }
 
-export function calculateAlarmTime(date: Date, interval: AlarmInterval, ianaTimeZone?: string): Date {
+// FIXME: need to support arbitrary alarms
+export function calculateAlarmTime(date: Date, interval: LegacyAlarmTrigger, ianaTimeZone?: string): Date {
 	let diff
 
 	switch (interval) {
-		case AlarmInterval.FIVE_MINUTES:
+		case LegacyAlarmTrigger.FIVE_MINUTES:
 			diff = {
 				minutes: 5,
 			}
 			break
 
-		case AlarmInterval.TEN_MINUTES:
+		case LegacyAlarmTrigger.TEN_MINUTES:
 			diff = {
 				minutes: 10,
 			}
 			break
 
-		case AlarmInterval.THIRTY_MINUTES:
+		case LegacyAlarmTrigger.THIRTY_MINUTES:
 			diff = {
 				minutes: 30,
 			}
 			break
 
-		case AlarmInterval.ONE_HOUR:
+		case LegacyAlarmTrigger.ONE_HOUR:
 			diff = {
 				hours: 1,
 			}
 			break
 
-		case AlarmInterval.ONE_DAY:
+		case LegacyAlarmTrigger.ONE_DAY:
 			diff = {
 				days: 1,
 			}
 			break
 
-		case AlarmInterval.TWO_DAYS:
+		case LegacyAlarmTrigger.TWO_DAYS:
 			diff = {
 				days: 2,
 			}
 			break
 
-		case AlarmInterval.THREE_DAYS:
+		case LegacyAlarmTrigger.THREE_DAYS:
 			diff = {
 				days: 3,
 			}
 			break
 
-		case AlarmInterval.ONE_WEEK:
+		case LegacyAlarmTrigger.ONE_WEEK:
 			diff = {
 				weeks: 1,
 			}
@@ -908,7 +909,7 @@ export function findNextAlarmOccurrence(
 	endType: EndType,
 	endValue: number,
 	exclusions: Array<Date>,
-	alarmTrigger: AlarmInterval,
+	alarmTrigger: LegacyAlarmTrigger,
 	localTimeZone: string,
 ): AlarmOccurrence | null {
 	let occurrenceNumber = 0
@@ -1241,38 +1242,38 @@ export const createRepeatRuleEndTypeValues = (): SelectorItemList<EndType> => {
 
 export const createIntervalValues = (): SelectorItemList<number> => numberRange(1, 256).map((n) => ({ name: String(n), value: n }))
 
-export const createAlarmIntervalItems = (): SelectorItemList<AlarmInterval> => [
+export const createAlarmIntervalItems = (): SelectorItemList<LegacyAlarmTrigger> => [
 	{
 		name: lang.get("calendarReminderIntervalFiveMinutes_label"),
-		value: AlarmInterval.FIVE_MINUTES,
+		value: LegacyAlarmTrigger.FIVE_MINUTES,
 	},
 	{
 		name: lang.get("calendarReminderIntervalTenMinutes_label"),
-		value: AlarmInterval.TEN_MINUTES,
+		value: LegacyAlarmTrigger.TEN_MINUTES,
 	},
 	{
 		name: lang.get("calendarReminderIntervalThirtyMinutes_label"),
-		value: AlarmInterval.THIRTY_MINUTES,
+		value: LegacyAlarmTrigger.THIRTY_MINUTES,
 	},
 	{
 		name: lang.get("calendarReminderIntervalOneHour_label"),
-		value: AlarmInterval.ONE_HOUR,
+		value: LegacyAlarmTrigger.ONE_HOUR,
 	},
 	{
 		name: lang.get("calendarReminderIntervalOneDay_label"),
-		value: AlarmInterval.ONE_DAY,
+		value: LegacyAlarmTrigger.ONE_DAY,
 	},
 	{
 		name: lang.get("calendarReminderIntervalTwoDays_label"),
-		value: AlarmInterval.TWO_DAYS,
+		value: LegacyAlarmTrigger.TWO_DAYS,
 	},
 	{
 		name: lang.get("calendarReminderIntervalThreeDays_label"),
-		value: AlarmInterval.THREE_DAYS,
+		value: LegacyAlarmTrigger.THREE_DAYS,
 	},
 	{
 		name: lang.get("calendarReminderIntervalOneWeek_label"),
-		value: AlarmInterval.ONE_WEEK,
+		value: LegacyAlarmTrigger.ONE_WEEK,
 	},
 ]
 

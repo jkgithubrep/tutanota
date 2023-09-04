@@ -26,7 +26,7 @@ import {
 } from "../../../src/calendar/date/CalendarUtils.js"
 import { lang } from "../../../src/misc/LanguageViewModel.js"
 import { createDateWrapper, createGroup, createGroupMembership, createUser, User } from "../../../src/api/entities/sys/TypeRefs.js"
-import { AccountType, AlarmInterval, EndType, GroupType, RepeatPeriod, ShareCapability } from "../../../src/api/common/TutanotaConstants.js"
+import { AccountType, LegacyAlarmTrigger, EndType, GroupType, RepeatPeriod, ShareCapability } from "../../../src/api/common/TutanotaConstants.js"
 import { timeStringFromParts } from "../../../src/misc/Formatter.js"
 import { DateTime } from "luxon"
 import { generateEventElementId, getAllDayDateUTC } from "../../../src/api/common/utils/CommonCalendarUtils.js"
@@ -541,7 +541,7 @@ o.spec("calendar utils tests", function () {
 				EndType.Never,
 				0,
 				[],
-				AlarmInterval.ONE_HOUR,
+				LegacyAlarmTrigger.ONE_HOUR,
 				timeZone,
 				10,
 			)
@@ -627,7 +627,7 @@ o.spec("calendar utils tests", function () {
 				EndType.UntilDate,
 				repeatEnd.getTime(),
 				[],
-				AlarmInterval.ONE_DAY,
+				LegacyAlarmTrigger.ONE_DAY,
 				timeZone,
 				10,
 			)
@@ -1855,7 +1855,7 @@ function iterateAlarmOccurrences(
 	endType: EndType,
 	endValue: number,
 	exclusions: Array<Date>,
-	alarmInterval: AlarmInterval,
+	alarmInterval: LegacyAlarmTrigger,
 	calculationZone: string,
 	maxOccurrences: number,
 ): Date[] {

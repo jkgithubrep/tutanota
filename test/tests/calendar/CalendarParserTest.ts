@@ -1,5 +1,6 @@
 import o from "@tutao/otest"
 import {
+	normalizeTrigger,
 	parseCalendarEvents,
 	parseDuration,
 	parseExDates,
@@ -103,40 +104,53 @@ o.spec("CalendarParser", function () {
 	o("parseDuration", function () {
 		o(parseDuration("PT3H15M")).deepEquals({
 			positive: true,
-			day: undefined,
+			day: 0,
 			hour: 3,
 			minute: 15,
-			week: undefined,
+			second: 0,
+			week: 0,
 		})
 		o(parseDuration("-PT3H15M")).deepEquals({
 			positive: false,
-			day: undefined,
+			day: 0,
 			hour: 3,
 			minute: 15,
-			week: undefined,
+			second: 0,
+			week: 0,
 		})
 		o(parseDuration("P60DT15M05S")).deepEquals({
 			positive: true,
 			day: 60,
-			hour: undefined,
+			hour: 0,
 			minute: 15,
-			week: undefined,
+			second: 5,
+			week: 0,
 		})
 		o(parseDuration("P8W")).deepEquals({
 			positive: true,
-			day: undefined,
-			hour: undefined,
-			minute: undefined,
+			day: 0,
+			hour: 0,
+			minute: 0,
+			second: 0,
 			week: 8,
 		})
 		o(parseDuration("P")).deepEquals({
 			positive: true,
-			day: undefined,
-			hour: undefined,
-			minute: undefined,
-			week: undefined,
+			day: 0,
+			hour: 0,
+			minute: 0,
+			second: 0,
+			week: 0,
 		})
 		o(() => parseDuration("P8W15M")).throws(Error)
+	})
+	o("normalizeTrigger", function () {
+		o(normalizeTrigger({ positive: false, week: 10, day: 0, hour: 0, minute: 0, second: 0 })).equals("-P10W")
+		o(normalizeTrigger({ positive: false, week: 10, day: 1, hour: 2, minute: 3, second: 10 })).equals("-P10W")("ignores others if there are weeks")
+		o(normalizeTrigger({ positive: true, week: 0, day: 10, hour: 0, minute: 0, second: 10 })).equals("+P10DT10S")
+		o(normalizeTrigger({ positive: false, week: 0, day: 0, hour: 5, minute: 0, second: 0 })).equals("-PT5H")
+		o(normalizeTrigger({ positive: false, week: 0, day: 0, hour: 0, minute: 0, second: 0 })).equals("-PT0S")
+		o(normalizeTrigger({ positive: false, week: 0, day: 1, hour: 0, minute: 0, second: 0 })).equals("-P1D")
 	})
 	o("parseTime", function () {
 		o(parseTime("20180115T214000Z", "Europe/Berlin")).deepEquals({

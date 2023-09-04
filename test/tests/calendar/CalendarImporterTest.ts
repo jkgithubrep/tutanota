@@ -15,7 +15,7 @@ import {
 } from "../../../src/api/entities/tutanota/TypeRefs.js"
 import { DateTime } from "luxon"
 import { createAlarmInfo, createDateWrapper, createRepeatRule, createUserAlarmInfo } from "../../../src/api/entities/sys/TypeRefs.js"
-import { AlarmInterval, CalendarAttendeeStatus, EndType, RepeatPeriod } from "../../../src/api/common/TutanotaConstants.js"
+import { AlarmTrigger, CalendarAttendeeStatus, EndType, RepeatPeriod } from "../../../src/api/common/TutanotaConstants.js"
 import { getAllDayDateUTC } from "../../../src/api/common/utils/CommonCalendarUtils.js"
 import { getAllDayDateUTCFromZone } from "../../../src/calendar/date/CalendarUtils.js"
 import { EventImportRejectionReason, sortOutParsedEvents } from "../../../src/calendar/export/CalendarImporterDialog.js"
@@ -188,13 +188,13 @@ o.spec("CalendarImporterTest", function () {
 			const alarmOne = createUserAlarmInfo({
 				alarmInfo: createAlarmInfo({
 					alarmIdentifier: "123",
-					trigger: AlarmInterval.ONE_DAY,
+					trigger: AlarmTrigger.ONE_DAY,
 				}),
 			})
 			const alarmTwo = createUserAlarmInfo({
 				alarmInfo: createAlarmInfo({
 					alarmIdentifier: "102",
-					trigger: AlarmInterval.THIRTY_MINUTES,
+					trigger: AlarmTrigger.THIRTY_MINUTES,
 				}),
 			})
 			o(
@@ -962,12 +962,12 @@ o.spec("CalendarImporterTest", function () {
 		o("roundtrip export -> import", async function () {
 			const alarmOne = createUserAlarmInfo({
 				alarmInfo: createAlarmInfo({
-					trigger: AlarmInterval.ONE_DAY,
+					trigger: AlarmTrigger.ONE_DAY,
 				}),
 			})
 			const alarmTwo = createUserAlarmInfo({
 				alarmInfo: createAlarmInfo({
-					trigger: AlarmInterval.THIRTY_MINUTES,
+					trigger: AlarmTrigger.THIRTY_MINUTES,
 				}),
 			})
 			const events = [
