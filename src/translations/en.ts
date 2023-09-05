@@ -1581,6 +1581,16 @@ export default {
 		"yourCalendars_label": "Your calendars",
 		"yourFolders_action": "YOUR FOLDERS",
 		"yourMessage_label": "Your message",
-		"you_label": "You"
+		"you_label": "You",
+		"weekAmount_label": "{amount} weeks",
+		"weekSingle_label": "1 week",
+		"daysAmount_label": "{amount} days",
+		"daySingle_label": "1 day",
+		"hoursAmount_label": "{amount} hours",
+		"hourSingle_label": "1 hour",
+		"minutesAmount_label": "{amount} minutes",
+		"minuteSingle_label": "1 minute",
+		"secondsAmount_label": "{amount} seconds",
+		"secondSingle_label": "1 second",
 	}
 }

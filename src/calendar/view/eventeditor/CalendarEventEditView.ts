@@ -71,7 +71,7 @@ export class CalendarEventEditView implements Component<CalendarEventEditViewAtt
 				this.renderAttendees(vnode.attrs),
 				this.renderEventTimeEditor(vnode.attrs),
 				this.renderRepeatRuleEditor(vnode.attrs),
-				m(".flex", [this.renderCalendarPicker(vnode), this.renderRemindersEditor(vnode)]),
+				m(".flex", [this.renderCalendarPicker(vnode), this.renderAlarmsEditor(vnode)]),
 				this.renderLocationField(vnode),
 				this.renderDescriptionEditor(vnode),
 			],
@@ -194,7 +194,7 @@ export class CalendarEventEditView implements Component<CalendarEventEditViewAtt
 		})
 	}
 
-	private renderRemindersEditor(vnode: Vnode<CalendarEventEditViewAttrs>): Children {
+	private renderAlarmsEditor(vnode: Vnode<CalendarEventEditViewAttrs>): Children {
 		if (!vnode.attrs.model.editModels.alarmModel.canEditReminders) return null
 		const { alarmModel } = vnode.attrs.model.editModels
 		const { taken, available } = alarmModel.splitTriggers(createAlarmIntervalItems(), (i) => i.value)
