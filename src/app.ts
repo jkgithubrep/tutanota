@@ -1,4 +1,5 @@
 import { client } from "./misc/ClientDetector"
+import type Mithril from "mithril"
 import m, { Children, ClassComponent, Component, RouteDefs, RouteResolver, Vnode, VnodeDOM } from "mithril"
 import { lang, languageCodeToTag, languages } from "./misc/LanguageViewModel"
 import { root } from "./RootView"
@@ -36,7 +37,6 @@ import type { MailViewModel } from "./mail/view/MailViewModel.js"
 import { SearchViewModel } from "./search/view/SearchViewModel.js"
 import { ContactViewModel } from "./contacts/view/ContactViewModel.js"
 import { ContactListViewModel } from "./contacts/view/ContactListViewModel.js"
-import type Mithril from "mithril"
 
 assertMainOrNodeBoot()
 bootFinished()
