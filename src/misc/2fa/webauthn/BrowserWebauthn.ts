@@ -89,6 +89,7 @@ export class BrowserWebauthn implements WebAuthnFacade {
 	}
 
 	async sign({ challenge, keys }: WebAuthnSignChallenge): Promise<WebAuthnSignResult> {
+		console.log("webauthn: sign", challenge, keys)
 		const allowCredentials: PublicKeyCredentialDescriptor[] = keys.map((key) => {
 			return {
 				id: key.id,

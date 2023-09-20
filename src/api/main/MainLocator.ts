@@ -98,6 +98,7 @@ import { InboxRuleHandler } from "../../mail/model/InboxRuleHandler.js"
 import { Router, ScopedRouter, ThrottledRouter } from "../../gui/ScopedRouter.js"
 import { ShareableGroupType } from "../../sharing/GroupUtils.js"
 import { KdfPicker } from "../../misc/KdfPicker.js"
+import { IFrameWebauthn } from "../../misc/2fa/webauthn/IFrameWebauthn.js"
 
 assertMainOrNode()
 
@@ -114,6 +115,7 @@ class MainLocator {
 	fileController!: FileController
 	secondFactorHandler!: SecondFactorHandler
 	webAuthn!: WebauthnClient
+	iframeWebAuthn!: WebauthnClient
 	loginFacade!: LoginFacade
 	logins!: LoginController
 	header!: Header
@@ -634,8 +636,9 @@ class MainLocator {
 
 		if (this.webAuthn == null) {
 			this.webAuthn = new WebauthnClient(new BrowserWebauthn(navigator.credentials, window.location.hostname), getWebRoot())
+			this.iframeWebAuthn = new WebauthnClient(new IFrameWebauthn(), getWebRoot())
 		}
-		this.secondFactorHandler = new SecondFactorHandler(this.eventController, this.entityClient, this.webAuthn, this.loginFacade)
+		this.secondFactorHandler = new SecondFactorHandler(this.eventController, this.entityClient, this.webAuthn, this.iframeWebAuthn, this.loginFacade)
 		this.loginListener = new PageContextLoginListener(this.secondFactorHandler)
 		this.credentialsProvider = await createCredentialsProvider(
 			deviceEncryptionFacade,

@@ -8,7 +8,7 @@ import { WebauthnKeyDescriptor } from "../../../native/common/generatedipc/Webau
 
 /** Web authentication entry point for the rest of the app. */
 export class WebauthnClient {
-	constructor(private readonly webauthn: WebAuthnFacade, private readonly clientWebRoot: string) {}
+	constructor(readonly webauthn: WebAuthnFacade, private readonly clientWebRoot: string) {}
 
 	isSupported(): Promise<boolean> {
 		return this.webauthn.isSupported()

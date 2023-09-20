@@ -33,7 +33,13 @@ export class SecondFactorHandler {
 	_otherLoginListenerInitialized: boolean
 	_waitingForSecondFactorDialog: SecondFactorAuthDialog | null
 
-	constructor(eventController: EventController, entityClient: EntityClient, webauthnClient: WebauthnClient, loginFacade: LoginFacade) {
+	constructor(
+		eventController: EventController,
+		entityClient: EntityClient,
+		webauthnClient: WebauthnClient,
+		private readonly iframeWebauthnClient: WebauthnClient,
+		loginFacade: LoginFacade,
+	) {
 		this._eventController = eventController
 		this._entityClient = entityClient
 		this._webauthnClient = webauthnClient
@@ -181,6 +187,7 @@ export class SecondFactorHandler {
 
 		this._waitingForSecondFactorDialog = SecondFactorAuthDialog.show(
 			this._webauthnClient,
+			this.iframeWebauthnClient,
 			this._loginFacade,
 			{
 				sessionId,

@@ -38,6 +38,7 @@ import { SearchViewModel } from "./search/view/SearchViewModel.js"
 import { ContactViewModel } from "./contacts/view/ContactViewModel.js"
 import { ContactListViewModel } from "./contacts/view/ContactListViewModel.js"
 import { YayFrameAttrs, YayFrameView } from "./login/YayFrameView.js"
+import { YayFrameViewModel } from "./login/YayFrameViewModel.js"
 
 assertMainOrNodeBoot()
 bootFinished()
@@ -418,10 +419,10 @@ import("./translations/en")
 				},
 				locator.logins,
 			),
-			yayframe: makeViewResolver<YayFrameAttrs, YayFrameView, { msg: string }>(
+			yayframe: makeViewResolver<YayFrameAttrs, YayFrameView, { viewModel: YayFrameViewModel }>(
 				{
 					prepareRoute: async () => {
-						return { component: YayFrameView, cache: { msg: "hello there?" } }
+						return { component: YayFrameView, cache: { viewModel: new YayFrameViewModel("https://localcustom.keemail.de:9000") } }
 					},
 					prepareAttrs: (cache) => cache,
 					requireLogin: false,

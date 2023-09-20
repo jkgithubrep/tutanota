@@ -7,7 +7,9 @@ import { Icons, SecondFactorImage } from "../../gui/base/icons/Icons"
 import { theme } from "../../gui/theme"
 import type { Thunk } from "@tutao/tutanota-utils"
 import { Autocomplete, TextField } from "../../gui/base/TextField.js"
-import { LoginFrame } from "../../gui/LoginFrame.js"
+import { LoginFrame, LoginFrameAttrs } from "../../gui/LoginFrame.js"
+import { IFrameWebauthn } from "./webauthn/IFrameWebauthn.js"
+import { locator } from "../../api/main/MainLocator.js"
 
 type WebauthnState = { state: "init" } | { state: "progress" } | { state: "error"; error: TranslationKey }
 
@@ -71,10 +73,22 @@ export class SecondFactorAuthView implements Component<SecondFactorViewAttrs> {
 		}
 
 		if (webauthn.canLogin) {
-			return this.renderWebauthnLogin(webauthn)
-		} else {
-			return this._renderOtherDomainLogin(webauthn)
+			return m(LoginFrame, {
+				url: "https://local.tutanota.com:9000/client/build/yayframe",
+				args: {
+					action: "sign",
+				},
+				doIt: () => webauthn.doWebauthn(),
+				iframeWebauthn: locator.iframeWebAuthn.webauthn as IFrameWebauthn,
+			} satisfies LoginFrameAttrs)
 		}
+		// fixme
+		//
+		// if (webauthn.canLogin) {
+		// 	return this.renderWebauthnLogin(webauthn)
+		// } else {
+		// 	return this._renderOtherDomainLogin(webauthn)
+		// }
 	}
 
 	renderWebauthnLogin(webauthn: WebauthnLoginParams): Children {
@@ -125,26 +139,16 @@ export class SecondFactorAuthView implements Component<SecondFactorViewAttrs> {
 	}
 
 	_renderOtherDomainLogin(attrs: WebauthnAnotherDomainParams): Children {
-		if (attrs.otherLoginDomain === "mail.tutanota.com") {
-			return m(LoginFrame, {
-				url: "https://local.tutanota.com:9000/client/build/yayframe",
-				args: {
-					action: "sign",
-					challenge:
-				},
-			})
-		} else {
-			const href = `https://${attrs.otherLoginDomain}`
-			return m(
-				"a",
-				{
-					href,
-				},
-				lang.get("differentSecurityKeyDomain_msg", {
-					"{domain}": href,
-				}),
-			)
-		}
+		const href = `https://${attrs.otherLoginDomain}`
+		return m(
+			"a",
+			{
+				href,
+			},
+			lang.get("differentSecurityKeyDomain_msg", {
+				"{domain}": href,
+			}),
+		)
 	}
 
 	_renderRecover(attrs: SecondFactorViewAttrs): Children {

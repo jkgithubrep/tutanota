@@ -43,6 +43,7 @@ export class SecondFactorAuthDialog {
 	/** @private */
 	private constructor(
 		private readonly webauthnClient: WebauthnClient,
+		private readonly iframeWebAuthnClient: WebauthnClient,
 		private readonly loginFacade: LoginFacade,
 		private readonly authData: AuthData,
 		private readonly onClose: Thunk,
@@ -54,8 +55,14 @@ export class SecondFactorAuthDialog {
 	 * @param authData
 	 * @param onClose will be called when the dialog is closed (one way or another).
 	 */
-	static show(webauthnClient: WebauthnClient, loginFacade: LoginFacade, authData: AuthData, onClose: Thunk): SecondFactorAuthDialog {
-		const dialog = new SecondFactorAuthDialog(webauthnClient, loginFacade, authData, onClose)
+	static show(
+		webauthnClient: WebauthnClient,
+		iframeWebAuthnClient: WebauthnClient,
+		loginFacade: LoginFacade,
+		authData: AuthData,
+		onClose: Thunk,
+	): SecondFactorAuthDialog {
+		const dialog = new SecondFactorAuthDialog(webauthnClient, iframeWebAuthnClient, loginFacade, authData, onClose)
 
 		dialog.show()
 
@@ -95,31 +102,44 @@ export class SecondFactorAuthDialog {
 		}
 
 		const { mailAddress } = this.authData
+		// fixme
+		const originalView = () => {
+			return m(SecondFactorAuthView, {
+				webauthn: canLoginWithU2f
+					? {
+							canLogin: true,
+							state: this.webauthnState,
+							doWebauthn: () => this.doWebauthn(assertNotNull(u2fChallenge), this.webauthnClient),
+					  }
+					: otherLoginDomain != null
+					? {
+							canLogin: false,
+							otherLoginDomain,
+					  }
+					: null,
+				otp: otpChallenge
+					? {
+							codeFieldValue: this.otpState.code,
+							inProgress: this.otpState.inProgress,
+							onValueChanged: (newValue) => (this.otpState.code = newValue),
+					  }
+					: null,
+				onRecover: mailAddress ? () => this.recoverLogin(mailAddress) : null,
+			})
+		}
+
 		this.waitingForSecondFactorDialog = Dialog.showActionDialog({
 			title: "",
 			allowOkWithReturn: true,
 			child: {
 				view: () => {
 					return m(SecondFactorAuthView, {
-						webauthn: canLoginWithU2f
-							? {
-									canLogin: true,
-									state: this.webauthnState,
-									doWebauthn: () => this.doWebauthn(assertNotNull(u2fChallenge)),
-							  }
-							: otherLoginDomain != null
-							? {
-									canLogin: false,
-									otherLoginDomain,
-							  }
-							: null,
-						otp: otpChallenge
-							? {
-									codeFieldValue: this.otpState.code,
-									inProgress: this.otpState.inProgress,
-									onValueChanged: (newValue) => (this.otpState.code = newValue),
-							  }
-							: null,
+						webauthn: {
+							canLogin: true,
+							state: this.webauthnState,
+							doWebauthn: () => this.doWebauthn(assertNotNull(u2fChallenge), this.iframeWebAuthnClient),
+						},
+						otp: null,
 						onRecover: mailAddress ? () => this.recoverLogin(mailAddress) : null,
 					})
 				},
@@ -162,7 +182,9 @@ export class SecondFactorAuthDialog {
 		this.close()
 	}
 
-	private async doWebauthn(u2fChallenge: Challenge) {
+	private async doWebauthn(u2fChallenge: Challenge, client: WebauthnClient) {
+		// fixme
+		console.log("doing webauthn!")
 		this.webauthnState = {
 			state: "progress",
 		}
@@ -170,7 +192,7 @@ export class SecondFactorAuthDialog {
 		const challenge = assertNotNull(u2fChallenge.u2f)
 
 		try {
-			const webauthnResponseData = await this.webauthnClient.authenticate(challenge)
+			const webauthnResponseData = await client.authenticate(challenge)
 			const authData = createSecondFactorAuthData({
 				type: SecondFactorType.webauthn,
 				session: sessionId,
