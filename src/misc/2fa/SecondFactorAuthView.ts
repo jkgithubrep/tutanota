@@ -126,7 +126,13 @@ export class SecondFactorAuthView implements Component<SecondFactorViewAttrs> {
 
 	_renderOtherDomainLogin(attrs: WebauthnAnotherDomainParams): Children {
 		if (attrs.otherLoginDomain === "mail.tutanota.com") {
-			return m(LoginFrame, { url: "https://local.tutanota.com:9000/client/build/yayframe?action=sign" })
+			return m(LoginFrame, {
+				url: "https://local.tutanota.com:9000/client/build/yayframe",
+				args: {
+					action: "sign",
+					challenge:
+				},
+			})
 		} else {
 			const href = `https://${attrs.otherLoginDomain}`
 			return m(

@@ -107,7 +107,7 @@ export class SecondFactorAuthDialog {
 									state: this.webauthnState,
 									doWebauthn: () => this.doWebauthn(assertNotNull(u2fChallenge)),
 							  }
-							: otherLoginDomain
+							: otherLoginDomain != null
 							? {
 									canLogin: false,
 									otherLoginDomain,

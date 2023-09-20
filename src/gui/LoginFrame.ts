@@ -1,7 +1,8 @@
-import m, { Component, Vnode, VnodeDOM } from "mithril"
+import m, { Component, Params, Vnode, VnodeDOM } from "mithril"
 
 type LoginFrameAttrs = {
 	url: string
+	args: Params
 }
 
 export class LoginFrame implements Component<LoginFrameAttrs> {
@@ -23,8 +24,9 @@ export class LoginFrame implements Component<LoginFrameAttrs> {
 	}
 
 	view(vnode: Vnode<LoginFrameAttrs>) {
+		const src = vnode.attrs.url + "?" + m.buildQueryString(vnode.attrs.args)
 		return m("iframe", {
-			src: vnode.attrs.url,
+			src,
 			sandbox: "allow-scripts",
 			title: "view of your login domain to confirm your 2nd factor",
 		})
