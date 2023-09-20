@@ -37,6 +37,7 @@ import type { MailViewModel } from "./mail/view/MailViewModel.js"
 import { SearchViewModel } from "./search/view/SearchViewModel.js"
 import { ContactViewModel } from "./contacts/view/ContactViewModel.js"
 import { ContactListViewModel } from "./contacts/view/ContactListViewModel.js"
+import { YayFrameAttrs, YayFrameView } from "./login/YayFrameView.js"
 
 assertMainOrNodeBoot()
 bootFinished()
@@ -411,6 +412,16 @@ import("./translations/en")
 								browserWebauthn: new BrowserWebauthn(navigator.credentials, window.location.hostname),
 							},
 						}
+					},
+					prepareAttrs: (cache) => cache,
+					requireLogin: false,
+				},
+				locator.logins,
+			),
+			yayframe: makeViewResolver<YayFrameAttrs, YayFrameView, { msg: string }>(
+				{
+					prepareRoute: async () => {
+						return { component: YayFrameView, cache: { msg: "hello there?" } }
 					},
 					prepareAttrs: (cache) => cache,
 					requireLogin: false,

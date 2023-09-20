@@ -11,7 +11,7 @@ import { TopLevelView } from "../TopLevelView.js"
 
 /**
  * This is a special view which is not used by the web client
- * directly but is loaded remotely by desktop client in a dialog.
+ * directly but is loaded remotely by desktop client in a dialog or shown in an iframe.
  * See DesktopWebauthnFacade.
  */
 export class NativeWebauthnView implements TopLevelView {

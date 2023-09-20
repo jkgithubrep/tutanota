@@ -7,6 +7,7 @@ import { Icons, SecondFactorImage } from "../../gui/base/icons/Icons"
 import { theme } from "../../gui/theme"
 import type { Thunk } from "@tutao/tutanota-utils"
 import { Autocomplete, TextField } from "../../gui/base/TextField.js"
+import { LoginFrame } from "../../gui/LoginFrame.js"
 
 type WebauthnState = { state: "init" } | { state: "progress" } | { state: "error"; error: TranslationKey }
 
@@ -124,16 +125,20 @@ export class SecondFactorAuthView implements Component<SecondFactorViewAttrs> {
 	}
 
 	_renderOtherDomainLogin(attrs: WebauthnAnotherDomainParams): Children {
-		const href = `https://${attrs.otherLoginDomain}`
-		return m(
-			"a",
-			{
-				href,
-			},
-			lang.get("differentSecurityKeyDomain_msg", {
-				"{domain}": href,
-			}),
-		)
+		if (attrs.otherLoginDomain === "mail.tutanota.com") {
+			return m(LoginFrame, { url: "https://local.tutanota.com:9000/client/build/yayframe?action=sign" })
+		} else {
+			const href = `https://${attrs.otherLoginDomain}`
+			return m(
+				"a",
+				{
+					href,
+				},
+				lang.get("differentSecurityKeyDomain_msg", {
+					"{domain}": href,
+				}),
+			)
+		}
 	}
 
 	_renderRecover(attrs: SecondFactorViewAttrs): Children {
