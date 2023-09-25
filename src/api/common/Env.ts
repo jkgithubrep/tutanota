@@ -46,7 +46,7 @@ export function getWebRoot(): string {
 	}
 
 	let origin = env.staticUrl
-	if (origin.startsWith("http://localhost:") || origin.startsWith("https://local.tutanota.com:")) {
+	if (origin.startsWith("http://localhost:") || origin.startsWith("https://local.tutanota.com:") || origin.startsWith("https://local.tuta.com")) {
 		origin += "/client/build"
 	}
 	return origin
@@ -55,6 +55,10 @@ export function getWebRoot(): string {
 export function getPaymentWebRoot(): string {
 	if (env.staticUrl === "mail.tutanota.com") {
 		return "https://pay.tutanota.com"
+	} else if (env.staticUrl === "app.tuta.com") {
+		return "https://pay.tuta.com"
+	} else if (env.staticUrl === "test.tuta.com") {
+		return "https://pay.test.tuta.com"
 	} else if (env.staticUrl === "test.tutanota.com") {
 		return "https://pay.test.tutanota.com"
 	} else {
@@ -64,7 +68,13 @@ export function getPaymentWebRoot(): string {
 
 export function isTutanotaDomain(hostname: string): boolean {
 	// *.tutanota.com or without dots (e.g. localhost). otherwise it is a custom domain
-	return hostname.endsWith("tutanota.com") || hostname.indexOf(".") === -1
+	return (
+		hostname === "tutanota.com" ||
+		hostname === "tuta.com" ||
+		hostname.endsWith(".tutanota.com") ||
+		hostname.endsWith(".tuta.com") ||
+		hostname.indexOf(".") === -1
+	)
 }
 
 export function isIOSApp(): boolean {
