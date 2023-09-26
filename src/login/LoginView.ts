@@ -216,7 +216,7 @@ export class LoginView extends BaseTopLevelView implements TopLevelView<LoginVie
 		return m(
 			".flex.col.pb",
 			{
-				oncreate: (vnode) => {
+				onupdate: (vnode) => {
 					const children = vnode.children as ChildArray
 					const firstChild = children[0] as Vnode<unknown, LoginForm>
 					this.loginForm.resolve(firstChild.state)
