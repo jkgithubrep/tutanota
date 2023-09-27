@@ -2,10 +2,11 @@ import { b64UserIdHash, DbFacade } from "../../search/DbFacade.js"
 import { assertNotNull, concat, downcast, LazyLoaded, stringToUtf8Uint8Array, utf8Uint8ArrayToString } from "@tutao/tutanota-utils"
 import type { User } from "../../../entities/sys/TypeRefs.js"
 import { ExternalImageRule } from "../../../common/TutanotaConstants.js"
-import { aesDecrypt, aes256RandomKey, decryptKey, encryptKey, IV_BYTE_LENGTH, random } from "@tutao/tutanota-crypto"
+import { aes256RandomKey, aesDecrypt, decryptKey, encryptKey, IV_BYTE_LENGTH, random } from "@tutao/tutanota-crypto"
 import { UserFacade } from "../UserFacade.js"
 import { Metadata, ObjectStoreName } from "../../search/IndexTables.js"
 import { aesEncrypt } from "@tutao/tutanota-crypto/dist/encryption/Aes.js"
+import { DbError } from "../../../common/error/DbError.js"
 
 const VERSION: number = 2
 const DB_KEY_PREFIX: string = "ConfigStorage"
@@ -53,7 +54,7 @@ export class ConfigurationDatabase {
 		const { db, metaData } = await this.db.getAsync()
 		if (!db.indexingSupported) return
 		const encryptedAddress = await encryptItem(address, metaData.key, metaData.iv)
-		return this._addAddressToImageList(encryptedAddress, rule)
+		return addAddressToImageList(db, encryptedAddress, rule)
 	}
 
 	async getExternalImageRule(address: string): Promise<ExternalImageRule> {
@@ -69,21 +70,12 @@ export class ConfigurationDatabase {
 				rule = entry.rule
 			} else {
 				// No rule set from earlier version means Allow
-				await this._addAddressToImageList(encryptedAddress, ExternalImageRule.Allow)
+				await addAddressToImageList(db, encryptedAddress, ExternalImageRule.Allow)
 				rule = ExternalImageRule.Allow
 			}
 		}
 
 		return rule
-	}
-
-	async _addAddressToImageList(encryptedAddress: Uint8Array, rule: ExternalImageRule): Promise<void> {
-		const { db } = await this.db.getAsync()
-		const transaction = await db.createTransaction(false, [ExternalImageListOS])
-		return transaction.put(ExternalImageListOS, null, {
-			address: encryptedAddress,
-			rule: rule,
-		})
 	}
 
 	async loadConfigDb(user: User, userGroupKey: Aes128Key): Promise<ConfigDb> {
@@ -98,11 +90,10 @@ export class ConfigurationDatabase {
 			const metaData = (await loadEncryptionMetadata(dbFacade, id, userGroupKey)) || (await initializeDb(dbFacade, id, userGroupKey))
 
 			if (event.oldVersion === 1) {
-				// migrate to aes256 with mac
+				// migrate from plain, mac-and-static-iv aes256 to aes256 with mac
 				const transaction = await dbFacade.createTransaction(true, [ExternalImageListOS])
 				const entries = await transaction.getAll(ExternalImageListOS)
-				const key = assertNotNull(metaData?.key)
-				const iv = assertNotNull(metaData?.iv)
+				const { key, iv } = metaData
 				for (const entry of entries) {
 					const address = await decryptLegacyItem(new Uint8Array(downcast(entry.key)), key, iv)
 					await this.addExternalImageRule(address, entry.value.rule)
@@ -155,5 +146,21 @@ async function initializeDb(db: DbFacade, id: string, userGroupKey: Aes128Key): 
 	return {
 		key,
 		iv,
+	}
+}
+
+async function addAddressToImageList(db: DbFacade, encryptedAddress: Uint8Array, rule: ExternalImageRule): Promise<void> {
+	try {
+		const transaction = await db.createTransaction(false, [ExternalImageListOS])
+		await transaction.put(ExternalImageListOS, null, {
+			address: encryptedAddress,
+			rule: rule,
+		})
+	} catch (e) {
+		if (e instanceof DbError) {
+			console.error("failed to add address to image list:", e.message)
+			return
+		}
+		throw e
 	}
 }
