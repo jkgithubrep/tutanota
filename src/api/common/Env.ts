@@ -41,15 +41,7 @@ export function getApiOrigin(): string {
  * root used for gift cards, referral links, and as the webauthn registered domain
  */
 export function getWebRoot(): string {
-	if (!env.staticUrl) {
-		return location.protocol + "//" + location.hostname + (location.port ? ":" + location.port : "")
-	}
-
-	let origin = env.staticUrl
-	if (origin.startsWith("http://localhost:") || origin.startsWith("https://local.tutanota.com:") || origin.startsWith("https://local.tuta.com")) {
-		origin += "/client/build"
-	}
-	return origin
+	return env.staticUrl ?? location.protocol + "//" + location.hostname + (location.port ? ":" + location.port : "")
 }
 
 export function getPaymentWebRoot(): string {

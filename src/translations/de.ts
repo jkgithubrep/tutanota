@@ -1583,6 +1583,11 @@ export default {
 		"yourMessage_label": "Deine Nachricht",
 		"you_label": "Du",
 		"suspiciousLink_title": "Verdächtiger Link",
-		"suspiciousLink_msg": "Bist du sicher, dass du \"{url}\" öffnen möchtest? Der Link könnte Programme auf deinem Gerät ausführen. Öffne nur Links, denen du vertraust."
+		"suspiciousLink_msg": "Bist du sicher, dass du \"{url}\" öffnen möchtest? Der Link könnte Programme auf deinem Gerät ausführen. Öffne nur Links, denen du vertraust.",
+		"tutanotaToTuta_msg": "Tutanota wird zu Tuta",
+		"movedDomainLegacy_msg": "Der Login ist auf eine neue Seite umgezogen. Du kannst dich jetzt schon dort einloggen:",
+		"getCredsFromLegacy_msg": "Du kannst eventuell gespeicherte Zugangsdaten von der alten Login-Seite übertragen und weiter verwenden, indem du hier klickst:",
+		"transferCredentials_msg": "Du kannst jetzt die folgenden Zugangsdaten zur neuen Login-Seite übertragen:",
+		"credentialMigrationDone_msg": "Du kannst deine Zugangsdaten jetzt auf der neuen Login-Seite verwenden und diesen Tab schließen."
 	}
 }

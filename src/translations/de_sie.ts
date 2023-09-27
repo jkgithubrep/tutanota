@@ -1583,6 +1583,9 @@ export default {
 		"yourMessage_label": "Ihre Nachricht",
 		"you_label": "Sie",
 		"suspiciousLink_title": "Verdächtiger Link",
-		"suspiciousLink_msg": "Sind Sie sicher, dass Sie \"{url}\" öffnen möchten? Der Link könnte Programme auf Ihrem Gerät ausführen. Öffnen Sie nur Links, denen Sie vertrauen."
+		"suspiciousLink_msg": "Sind Sie sicher, dass Sie \"{url}\" öffnen möchten? Der Link könnte Programme auf Ihrem Gerät ausführen. Öffnen Sie nur Links, denen Sie vertrauen.",
+		"movedDomainLegacy_msg": "Die Login-Domain wird bald auf eine neue Domain umziehen. Sie können sich dich jetzt schon dort einloggen.",
+		"getCredsFromLegacy_msg": "Sie können eventuell gespeicherte Zugangsdaten von der alten Login-Domain übertragen und weiter verwenden, indem sie hier klicken:",
+		"transferCredentials_msg": "Sie können jetzt die folgenden Zugangsdaten zur neuen Login-Domain übertragen:",
 	}
 }

@@ -1579,6 +1579,11 @@ export default {
 		"yourMessage_label": "Your message",
 		"you_label": "You",
 		"suspiciousLink_title": "Suspicious link",
-		"suspiciousLink_msg": "Are you sure you want to open \"{url}\"? It might run programs on your device. Only open links from trusted sources."
+		"suspiciousLink_msg": "Are you sure you want to open \"{url}\"? It might run programs on your device. Only open links from trusted sources.",
+		"tutanotaToTuta_msg": "Tutanota is now Tuta",
+		"movedDomainLegacy_msg": "The login page has moved to a new site. You can go there now and log in:",
+		"getCredsFromLegacy_msg": "You can transfer and reuse any saved credentials from the old login page by clicking here:",
+		"transferCredentials_msg": "You can now transfer these credentials to the new login page:",
+		"credentialMigrationDone_msg": "You can now use your credentials on the new login page and close this tab."
 	}
 }

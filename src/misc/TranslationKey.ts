@@ -1565,3 +1565,8 @@ export type TranslationKeyType =
 	| "emptyString_msg"
 	| "suspiciousLink_title"
 	| "suspiciousLink_msg"
+	| "movedDomainLegacy_msg"
+	| "tutanotaToTuta_msg"
+	| "getCredsFromLegacy_msg"
+	| "transferCredentials_msg"
+	| "credentialMigrationDone_msg"
