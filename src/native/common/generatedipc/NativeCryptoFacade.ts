@@ -4,6 +4,7 @@ import { RsaPublicKey } from "./RsaPublicKey.js"
 import { RsaPrivateKey } from "./RsaPrivateKey.js"
 import { EncryptedFileInfo } from "./EncryptedFileInfo.js"
 import { RsaKeyPair } from "./RsaKeyPair.js"
+import { KyberFacade } from "../../../api/worker/facades/KyberFacade.js"
 export interface NativeCryptoFacade {
 	rsaEncrypt(publicKey: RsaPublicKey, data: Uint8Array, seed: Uint8Array): Promise<Uint8Array>
 

@@ -63,6 +63,7 @@ import { LoginFailReason } from "../main/PageContextLoginListener.js"
 import { ConnectionError, ServiceUnavailableError } from "../common/error/RestError.js"
 import { SessionType } from "../common/SessionType.js"
 import { Argon2idFacade, NativeArgon2idFacade, WASMArgon2idFacade } from "./facades/Argon2idFacade.js"
+import { KyberFacade, NativeKyberFacade, WASMKyberFacade } from "./facades/KyberFacade.js"
 
 assertWorkerOrNode()
 
@@ -77,6 +78,7 @@ export type WorkerLocatorType = {
 	cachingEntityClient: EntityClient
 	eventBusClient: EventBusClient
 	rsa: RsaImplementation
+	kyberFacade: KyberFacade
 	entropyFacade: EntropyFacade
 	blobAccessToken: BlobAccessTokenFacade
 
@@ -175,6 +177,12 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		return new Indexer(entityRestClient, mainInterface.infoMessageHandler, browserData, locator.cache as DefaultEntityRestCache)
 	})
 
+	if (isIOSApp() || isAndroidApp()) {
+		locator.kyberFacade = new NativeKyberFacade(new NativeCryptoFacadeSendDispatcher(worker))
+	} else {
+		locator.kyberFacade = new WASMKyberFacade()
+	}
+
 	locator.crypto = new CryptoFacade(
 		locator.user,
 		locator.cachingEntityClient,
@@ -183,6 +191,7 @@ export async function initLocator(worker: WorkerImpl, browserData: BrowserData) 
 		locator.serviceExecutor,
 		locator.instanceMapper,
 		new OwnerEncSessionKeysUpdateQueue(locator.user, locator.serviceExecutor),
+		// TODO kyberFacade
 	)
 
 	const loginListener: LoginListener = {
