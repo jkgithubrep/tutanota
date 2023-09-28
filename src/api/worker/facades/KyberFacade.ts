@@ -35,9 +35,9 @@ export interface KyberFacade {
  * WebAssembly implementation of Liboqs
  */
 export class WASMKyberFacade implements KyberFacade {
-	// loads kyber WASM
-	private kyber: LazyLoaded<WebAssembly.Exports> = new LazyLoaded(async () => {
-		const wasm = fetch("wasm/kyber.wasm")
+	// loads liboqs WASM
+	private liboqs: LazyLoaded<WebAssembly.Exports> = new LazyLoaded(async () => {
+		const wasm = fetch("wasm/liboqs.wasm")
 		if (WebAssembly.instantiateStreaming) {
 			return (await WebAssembly.instantiateStreaming(wasm)).instance.exports
 		} else {
@@ -48,15 +48,15 @@ export class WASMKyberFacade implements KyberFacade {
 	})
 
 	async generateKeypair(): Promise<KyberKeyPair> {
-		return generateKeyPair(await this.kyber.getAsync())
+		return generateKeyPair(await this.liboqs.getAsync())
 	}
 
 	decapsulate(privateKey: KyberPrivateKey, ciphertext: Uint8Array): Promise<Uint8Array> {
-		return Promise.resolve(undefined)
+		return Promise.resolve(new Uint8Array())
 	}
 
 	encapsulate(publicKey: KyberPublicKey): Promise<KyberEncapsulation> {
-		return Promise.resolve(undefined)
+		return Promise.resolve({ ciphertext: new Uint8Array(), sharedSecret: new Uint8Array() })
 	}
 }
 

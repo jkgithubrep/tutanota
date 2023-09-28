@@ -11,6 +11,8 @@ export {
 	aes256EncryptSearchIndexEntry,
 } from "./encryption/Aes.js"
 export { generateRandomSalt, generateKeyFromPassphrase as generateKeyFromPassphraseBcrypt } from "./hashes/Bcrypt.js"
+export { generateKeyPair as generateKeyPairKyber, encapsulate, decapsulate } from "./encryption/Liboqs/Kyber.js"
+export { KyberEncapsulation, KyberPrivateKey, KyberPublicKey, KyberKeyPair } from "./encryption/Liboqs/KyberKeyPair.js"
 export {
 	generateKeyFromPassphrase as generateKeyFromPassphraseArgon2id,
 	ARGON2ID_ITERATIONS,
