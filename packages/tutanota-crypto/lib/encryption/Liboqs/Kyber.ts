@@ -31,6 +31,7 @@ export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
 		OQS_KEM = OQS_KEM_new(methodBuf.byteOffset)
 
 		if (!OQS_KEM || isNull(publicKeyBuf) || isNull(privateKeyBuf)) {
+			console.log("XXX", OQS_KEM)
 			throw new Error("kyber key generation malloc failure")
 		}
 

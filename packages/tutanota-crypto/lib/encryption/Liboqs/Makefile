@@ -37,5 +37,5 @@ ${WASM}: include
     	-O3 \
     	--no-entry \
     	-s TOTAL_MEMORY=${TOTAL_MEMORY} \
-    	-s EXPORTED_FUNCTIONS="['_OQS_KEM_new', '_OQS_KEM_free', '_OQS_KEM_keypair', '_OQS_KEM_encaps', '_OQS_KEM_decaps', '_malloc', '_free']" \
+    	-s EXPORTED_FUNCTIONS="['_OQS_KEM_new', '_OQS_KEM_free', '_OQS_KEM_keypair', '_OQS_KEM_encaps', '_OQS_KEM_decaps', '_OQS_KEM_alg_is_enabled', '_malloc', '_free']" \
     	-o ${WASM}
