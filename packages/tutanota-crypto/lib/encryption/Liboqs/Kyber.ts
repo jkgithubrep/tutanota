@@ -1,5 +1,6 @@
 import { KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey } from "./KyberKeyPair.js"
 import { stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
+import { random } from "../../random/Randomizer.js"
 
 const KYBER_ALGORITHM = "Kyber1024\0"
 const OQS_KEM_kyber_1024_length_public_key = 1568
@@ -17,12 +18,26 @@ export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
 	const OQS_KEM_keypair = kyberWasm.OQS_KEM_keypair as OQS_KEM_KEYPAIR_RawFN
 	const OQS_KEM_new = kyberWasm.OQS_KEM_new as OQS_KEM_NEW_RawFN
 	const OQS_KEM_free = kyberWasm.OQS_KEM_free as OQS_KEM_FREE_RawFN
+	const OQS_KEM_alg_is_enabled = kyberWasm.OQS_KEM_alg_is_enabled as OQS_KEM_alg_is_enabled_RawFN
+	const TUTA_inject_entropy = kyberWasm.TUTA_inject_entropy as TUTA_inject_entropy_RawFN
 
+	const entropyBuf = new Uint8Array(memory.buffer, malloc(1024), 1024)
 	const methodBuf = new Uint8Array(memory.buffer, malloc(KYBER_ALGORITHM.length), KYBER_ALGORITHM.length)
 	const publicKeyBuf = new Uint8Array(memory.buffer, malloc(OQS_KEM_kyber_1024_length_public_key), OQS_KEM_kyber_1024_length_public_key)
 	const privateKeyBuf = new Uint8Array(memory.buffer, malloc(OQS_KEM_kyber_1024_length_secret_key), OQS_KEM_kyber_1024_length_secret_key)
+
 	let OQS_KEM: Ptr | null = null
 	try {
+		// Add bytes externally to the random number generator
+		if (isNull(entropyBuf)) {
+			throw new Error("entropy allocation failure")
+		}
+		while (TUTA_inject_entropy(0, 0) > 0) {
+			entropyBuf.set(random.generateRandomData(entropyBuf.length))
+			TUTA_inject_entropy(entropyBuf.byteOffset, entropyBuf.length)
+		}
+		entropyBuf.fill(0)
+
 		if (isNull(methodBuf)) {
 			throw new Error("kyber key generation malloc failure")
 		}
@@ -60,6 +75,7 @@ export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
 		free(privateKeyBuf.byteOffset)
 		free(publicKeyBuf.byteOffset)
 		free(methodBuf.byteOffset)
+		free(entropyBuf.byteOffset)
 		if (OQS_KEM) {
 			OQS_KEM_free(OQS_KEM)
 		}
@@ -83,6 +99,8 @@ type MallocFN = (len: number) => Ptr
 type OQS_KEM_KEYPAIR_RawFN = (kem: Ptr, publicKey: Ptr, secretKey: Ptr) => number
 type OQS_KEM_NEW_RawFN = (methodName: Ptr) => Ptr
 type OQS_KEM_FREE_RawFN = (kem: Ptr | null) => void
+type OQS_KEM_alg_is_enabled_RawFN = (kem: Ptr) => number
+type TUTA_inject_entropy_RawFN = (data: Ptr, size: number) => number
 
 function isNull(array: Uint8Array): boolean {
 	return array.byteOffset === 0

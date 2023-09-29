@@ -7,7 +7,7 @@ const liboqs = await loadWasmModuleFromFile("../lib/encryption/Liboqs/liboqs.was
 o.spec("Kyber", async function () {
 	o("encryption roundtrip", async function () {
 		const keyPair = generateKeyPair(liboqs)
-		o(1568).equals(keyPair.privateKey.encoded.length)
-		o(1568).equals(keyPair.publicKey.encoded.length)
+		o(keyPair.privateKey.encoded.length).equals(3168)
+		o(keyPair.publicKey.encoded.length).equals(1568)
 	})
 })
