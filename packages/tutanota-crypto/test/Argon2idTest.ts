@@ -1,19 +1,9 @@
 import o from "@tutao/otest"
-import { bitArrayToUint8Array, generateRandomSalt, uint8ArrayToBitArray } from "../lib/index.js"
+import { bitArrayToUint8Array, generateRandomSalt } from "../lib/index.js"
 import { generateKeyFromPassphrase } from "../lib/hashes/Argon2id/Argon2id.js"
-import { Hex, hexToUint8Array, uint8ArrayToHex } from "@tutao/tutanota-utils"
-import { Aes256Key } from "../lib/encryption/Aes.js"
 import { loadWasmModuleFromFile } from "./WebAssemblyTestUtils.js"
 
 const argon2 = await loadWasmModuleFromFile("../lib/hashes/Argon2id/argon2.wasm")
-
-function _hexToKey(hex: Hex): Aes256Key {
-	return uint8ArrayToBitArray(hexToUint8Array(hex))
-}
-
-function _keyToHex(key: Aes256Key): Hex {
-	return uint8ArrayToHex(bitArrayToUint8Array(key))
-}
 
 o.spec("Argon2id", async function () {
 	o("GenerateKeyFromPassphrase", async function () {

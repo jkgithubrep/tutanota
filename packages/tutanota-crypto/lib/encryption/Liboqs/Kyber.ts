@@ -177,7 +177,6 @@ export function decapsulate(kyberWasm: WebAssembly.Exports, privateKey: KyberPri
 }
 
 type Ptr = number
-
 type FreeFN = (what: Ptr) => void
 type MallocFN = (len: number) => Ptr
 type OQS_KEM_KEYPAIR_RawFN = (kem: Ptr, publicKey: Ptr, secretKey: Ptr) => number
