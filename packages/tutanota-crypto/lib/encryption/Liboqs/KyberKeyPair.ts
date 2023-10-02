@@ -3,10 +3,10 @@ export type KyberKeyPair = {
 	privateKey: KyberPrivateKey
 }
 export type KyberPrivateKey = {
-	encoded: Uint8Array
+	raw: Uint8Array
 }
 export type KyberPublicKey = {
-	encoded: Uint8Array
+	raw: Uint8Array
 }
 
 export type KyberEncapsulation = {

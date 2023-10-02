@@ -1,8 +1,9 @@
-import { LazyLoaded } from "@tutao/tutanota-utils"
+import { concat, Hex, hexToUint8Array, LazyLoaded } from "@tutao/tutanota-utils"
 import { NativeCryptoFacade } from "../../../native/common/generatedipc/NativeCryptoFacade.js"
 import { assertWorkerOrNode } from "../../common/Env.js"
-import { KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey } from "../../../../packages/tutanota-crypto/lib/encryption/Liboqs/KyberKeyPair.js"
-import { generateKeyPair } from "../../../../packages/tutanota-crypto/lib/encryption/Liboqs/Kyber.js"
+import { CryptoError, KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey } from "@tutao/tutanota-crypto"
+import { generateKeyPair, encapsulate, decapsulate } from "@tutao/tutanota-crypto/dist/encryption/Liboqs/Kyber.js"
+import { BigInteger, parseBigInt } from "@tutao/tutanota-crypto/dist/internal/crypto-jsbn-2012-08-09_1.js"
 
 assertWorkerOrNode()
 
@@ -51,12 +52,12 @@ export class WASMKyberFacade implements KyberFacade {
 		return generateKeyPair(await this.liboqs.getAsync())
 	}
 
-	decapsulate(privateKey: KyberPrivateKey, ciphertext: Uint8Array): Promise<Uint8Array> {
-		return Promise.resolve(new Uint8Array())
+	async encapsulate(publicKey: KyberPublicKey): Promise<KyberEncapsulation> {
+		return encapsulate(await this.liboqs.getAsync(), publicKey)
 	}
 
-	encapsulate(publicKey: KyberPublicKey): Promise<KyberEncapsulation> {
-		return Promise.resolve({ ciphertext: new Uint8Array(), sharedSecret: new Uint8Array() })
+	async decapsulate(privateKey: KyberPrivateKey, ciphertext: Uint8Array): Promise<Uint8Array> {
+		return decapsulate(await this.liboqs.getAsync(), privateKey, ciphertext)
 	}
 }
 
@@ -76,6 +77,42 @@ export class NativeKyberFacade implements KyberFacade {
 	}
 
 	generateKeypair(): Promise<KyberKeyPair> {
-		return Promise.resolve({ privateKey: { encoded: new Uint8Array() }, publicKey: { encoded: new Uint8Array() } })
+		return Promise.resolve({ privateKey: { raw: new Uint8Array() }, publicKey: { raw: new Uint8Array() } })
+	}
+}
+
+export function hexToKyberPublicKey(hex: Hex): KyberPublicKey {
+	const keyComponents = _hexToKyberKeyArray(hex)
+	if (keyComponents.length != 2) {
+		throw new Error("invalid public key hex encoding")
+	}
+
+	return { raw: concat(...keyComponents) }
+}
+
+export function hexToKyberPrivateKey(hex: Hex): KyberPublicKey {
+	const keyComponents = _hexToKyberKeyArray(hex)
+	if (keyComponents.length != 5) {
+		throw new Error("invalid private key hex encoding")
+	}
+
+	return { raw: concat(...keyComponents) }
+}
+
+function _hexToKyberKeyArray(hex: Hex): Uint8Array[] {
+	try {
+		var key: Uint8Array[] = []
+		var pos = 0
+
+		while (pos < hex.length) {
+			var nextParamLen = parseInt(hex.substring(pos, pos + 4), 16)
+			pos += 4
+			key.push(hexToUint8Array(hex.substring(pos, pos + nextParamLen)))
+			pos += nextParamLen
+		}
+
+		return key
+	} catch (e) {
+		throw new CryptoError("hex to kyber key failed", e as Error)
 	}
 }

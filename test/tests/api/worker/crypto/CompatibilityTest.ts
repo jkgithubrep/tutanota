@@ -3,7 +3,9 @@ import {
 	aesDecrypt,
 	aesEncrypt,
 	bitArrayToUint8Array,
+	decapsulate,
 	decryptKey,
+	encapsulate,
 	encryptKey,
 	generateKeyFromPassphraseArgon2id,
 	generateKeyFromPassphraseBcrypt,
@@ -26,6 +28,7 @@ import {
 } from "@tutao/tutanota-utils"
 import testData from "./CompatibilityTestData.json"
 import { uncompress } from "../../../../../src/api/worker/Compression.js"
+import { hexToKyberPrivateKey, hexToKyberPublicKey } from "../../../../../src/api/worker/facades/KyberFacade.js"
 
 const originalRandom = random.generateRandomData
 
@@ -43,6 +46,37 @@ o.spec("crypto compatibility", function () {
 			let privateKey = hexToPrivateKey(td.privateKey)
 			let data = rsaDecrypt(privateKey, encryptedData)
 			o(uint8ArrayToHex(data)).equals(td.input)
+		}
+	})
+	o("kyber", async () => {
+		let liboqs: WebAssembly.Exports
+
+		// @ts-ignore
+		const { default: liboqsSource } = await import("../../../../../packages/tutanota-crypto/lib/encryption/Liboqs/liboqs.wasm")
+
+		if (typeof process !== "undefined") {
+			try {
+				const { join, dirname } = await import("node:path")
+				const { fileURLToPath } = await import("node:url")
+				const { readFile } = await import("node:fs/promises")
+				const path = join(dirname(fileURLToPath(import.meta.url)), liboqsSource)
+				liboqs = (await WebAssembly.instantiate(await readFile(path))).instance.exports
+			} catch (e) {
+				throw new Error(`failed to load liboqs: ${e}`)
+			}
+		} else {
+			liboqs = (await WebAssembly.instantiateStreaming(fetch(liboqsSource))).instance.exports
+		}
+
+		for (const td of testData.kyberEncryptionTests) {
+			const publicKey = hexToKyberPublicKey(td.publicKey)
+			const privateKey = hexToKyberPrivateKey(td.privateKey)
+			const encapsulation = encapsulate(liboqs, publicKey)
+
+			// o(encapsulation.sharedSecret).deepEquals(hexToUint8Array(td.sharedSecret))
+
+			const decapsulatedSharedSecret = decapsulate(liboqs, privateKey, hexToUint8Array(td.cipherText))
+			o(decapsulatedSharedSecret).deepEquals(hexToUint8Array(td.sharedSecret))
 		}
 	})
 	o("aes 256", function () {

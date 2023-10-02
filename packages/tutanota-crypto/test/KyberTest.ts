@@ -1,13 +1,21 @@
 import o from "@tutao/otest"
 import { loadWasmModuleFromFile } from "./WebAssemblyTestUtils.js"
-import { generateKeyPair } from "../lib/encryption/Liboqs/Kyber.js"
+import { decapsulate, encapsulate, generateKeyPair } from "../lib/encryption/Liboqs/Kyber.js"
 
 const liboqs = await loadWasmModuleFromFile("../lib/encryption/Liboqs/liboqs.wasm")
 
 o.spec("Kyber", async function () {
 	o("encryption roundtrip", async function () {
 		const keyPair = generateKeyPair(liboqs)
-		o(keyPair.privateKey.encoded.length).equals(3168)
-		o(keyPair.publicKey.encoded.length).equals(1568)
+		o(keyPair.privateKey.raw.length).equals(3168)
+		o(keyPair.publicKey.raw.length).equals(1568)
+
+		const encapsulation = encapsulate(liboqs, keyPair.publicKey)
+		o(encapsulation.sharedSecret.length).equals(32)
+		o(encapsulation.ciphertext.length).equals(1568)
+
+		const decapsulatedSecret = decapsulate(liboqs, keyPair.privateKey, encapsulation.ciphertext)
+
+		o(encapsulation.sharedSecret).deepEquals(decapsulatedSecret)
 	})
 })
