@@ -21,22 +21,13 @@ export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
 	const OQS_KEM_alg_is_enabled = kyberWasm.OQS_KEM_alg_is_enabled as OQS_KEM_alg_is_enabled_RawFN
 	const TUTA_inject_entropy = kyberWasm.TUTA_inject_entropy as TUTA_inject_entropy_RawFN
 
-	const entropyBuf = new Uint8Array(memory.buffer, malloc(1024), 1024)
 	const methodBuf = new Uint8Array(memory.buffer, malloc(KYBER_ALGORITHM.length), KYBER_ALGORITHM.length)
 	const publicKeyBuf = new Uint8Array(memory.buffer, malloc(OQS_KEM_kyber_1024_length_public_key), OQS_KEM_kyber_1024_length_public_key)
 	const privateKeyBuf = new Uint8Array(memory.buffer, malloc(OQS_KEM_kyber_1024_length_secret_key), OQS_KEM_kyber_1024_length_secret_key)
 
 	let OQS_KEM: Ptr | null = null
 	try {
-		// Add bytes externally to the random number generator
-		if (isNull(entropyBuf)) {
-			throw new Error("entropy allocation failure")
-		}
-		while (TUTA_inject_entropy(0, 0) > 0) {
-			entropyBuf.set(random.generateRandomData(entropyBuf.length))
-			TUTA_inject_entropy(entropyBuf.byteOffset, entropyBuf.length)
-		}
-		entropyBuf.fill(0)
+		fillEntropyPool(memory, TUTA_inject_entropy, malloc, free)
 
 		if (isNull(methodBuf)) {
 			throw new Error("kyber key generation malloc failure")
@@ -75,7 +66,6 @@ export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
 		free(privateKeyBuf.byteOffset)
 		free(publicKeyBuf.byteOffset)
 		free(methodBuf.byteOffset)
-		free(entropyBuf.byteOffset)
 		if (OQS_KEM) {
 			OQS_KEM_free(OQS_KEM)
 		}
@@ -104,4 +94,22 @@ type TUTA_inject_entropy_RawFN = (data: Ptr, size: number) => number
 
 function isNull(array: Uint8Array): boolean {
 	return array.byteOffset === 0
+}
+
+// Add bytes externally to the random number generator
+function fillEntropyPool(memory: WebAssembly.Memory, TUTA_inject_entropy: TUTA_inject_entropy_RawFN, malloc: MallocFN, free: FreeFN) {
+	const entropyNeeded = TUTA_inject_entropy(0, 0)
+	const entropyBuf = new Uint8Array(memory.buffer, malloc(entropyNeeded), entropyNeeded)
+	try {
+		if (isNull(entropyBuf)) {
+			throw new Error("entropy allocation failure")
+		}
+		entropyBuf.set(random.generateRandomData(entropyBuf.length))
+		TUTA_inject_entropy(entropyBuf.byteOffset, entropyBuf.length)
+	} finally {
+		if (!isNull(entropyBuf)) {
+			entropyBuf.fill(0)
+			free(entropyBuf.byteOffset)
+		}
+	}
 }

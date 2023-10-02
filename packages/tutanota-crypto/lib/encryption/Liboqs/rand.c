@@ -2,7 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-static uint8_t entropy[1024*1024];
+#define AMOUNT_OF_ENTROPY (64)
+static uint8_t entropy[AMOUNT_OF_ENTROPY];
 static size_t current_offset = sizeof(entropy);
 
 #define REMAINING_ENTROPY (sizeof(entropy) - current_offset)
@@ -35,8 +36,12 @@ void OQS_randombytes(uint8_t *random_array, size_t bytes_to_read) {
 	if (bytes_to_read > REMAINING_ENTROPY) {
 		exit(1);
 	}
-	memcpy(random_array, entropy + current_offset, bytes_to_read);
-	memset(entropy + current_offset, 0, bytes_to_read); // clear out the byte we just copied
+
+	uint8_t *entropy_to_copy = entropy + current_offset;
+
+	memcpy(random_array, entropy_to_copy, bytes_to_read);
+	memset(entropy_to_copy, 0, bytes_to_read); // clear out the bytes we just copied so it only exists in one place
+
 	current_offset += bytes_to_read;
 }
 
