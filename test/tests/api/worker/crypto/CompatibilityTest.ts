@@ -3,9 +3,9 @@ import {
 	aesDecrypt,
 	aesEncrypt,
 	bitArrayToUint8Array,
-	decapsulate,
+	decapsulateKyber,
 	decryptKey,
-	encapsulate,
+	encapsulateKyber,
 	encryptKey,
 	generateKeyFromPassphraseArgon2id,
 	generateKeyFromPassphraseBcrypt,
@@ -30,7 +30,7 @@ import {
 } from "@tutao/tutanota-utils"
 import testData from "./CompatibilityTestData.json"
 import { uncompress } from "../../../../../src/api/worker/Compression.js"
-import { hexToKyberPrivateKey, hexToKyberPublicKey } from "../../../../../src/api/worker/facades/KyberFacade.js"
+import { hexToKyberPrivateKey, hexToKyberPublicKey, kyberPrivateKeyToHex, kyberPublicKeyToHex } from "../../../../../src/api/worker/facades/KyberFacade.js"
 import { matchers, object, when } from "testdouble"
 
 const originalRandom = random.generateRandomData
@@ -74,16 +74,19 @@ o.spec("crypto compatibility", function () {
 		for (const td of testData.kyberEncryptionTests) {
 			const publicKey = hexToKyberPublicKey(td.publicKey)
 			const privateKey = hexToKyberPrivateKey(td.privateKey)
+			o(kyberPublicKeyToHex(publicKey)).deepEquals(td.publicKey)
+			o(kyberPrivateKeyToHex(privateKey)).deepEquals(td.privateKey)
+
 			const seed = hexToUint8Array(td.seed)
 
 			const randomizer = object<Randomizer>()
 			when(randomizer.generateRandomData(matchers.anything())).thenReturn(seed)
 
-			const encapsulation = encapsulate(liboqs, publicKey, randomizer)
+			const encapsulation = encapsulateKyber(liboqs, publicKey, randomizer)
 			o(encapsulation.sharedSecret).deepEquals(hexToUint8Array(td.sharedSecret))
 			o(encapsulation.ciphertext).deepEquals(hexToUint8Array(td.cipherText))
 
-			const decapsulatedSharedSecret = decapsulate(liboqs, privateKey, hexToUint8Array(td.cipherText))
+			const decapsulatedSharedSecret = decapsulateKyber(liboqs, privateKey, hexToUint8Array(td.cipherText))
 			o(decapsulatedSharedSecret).deepEquals(hexToUint8Array(td.sharedSecret))
 		}
 	})

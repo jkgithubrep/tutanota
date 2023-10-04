@@ -1,8 +1,12 @@
 import { KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey } from "./KyberKeyPair.js"
 import { stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
-import { random, Randomizer } from "../../random/Randomizer.js"
+import { Randomizer } from "../../random/Randomizer.js"
 
 const KYBER_ALGORITHM = "Kyber1024"
+const KYBER_K = 4
+const KYBER_POLYBYTES = 384
+export const KYBER_POLYVECBYTES = KYBER_K * KYBER_POLYBYTES
+export const KYBER_SYMBYTES = 32
 const OQS_KEM_kyber_1024_length_public_key = 1568
 const OQS_KEM_kyber_1024_length_secret_key = 3168
 const OQS_KEM_kyber_1024_length_ciphertext = 1568

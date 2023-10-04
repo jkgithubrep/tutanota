@@ -1,9 +1,17 @@
-import { concat, Hex, hexToUint8Array, LazyLoaded } from "@tutao/tutanota-utils"
+import { concat, Hex, hexToUint8Array, LazyLoaded, uint8ArrayToHex } from "@tutao/tutanota-utils"
 import { NativeCryptoFacade } from "../../../native/common/generatedipc/NativeCryptoFacade.js"
 import { assertWorkerOrNode } from "../../common/Env.js"
-import { CryptoError, KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey, random } from "@tutao/tutanota-crypto"
-import { generateKeyPair, encapsulate, decapsulate } from "@tutao/tutanota-crypto/dist/encryption/Liboqs/Kyber.js"
-import { BigInteger, parseBigInt } from "@tutao/tutanota-crypto/dist/internal/crypto-jsbn-2012-08-09_1.js"
+import {
+	CryptoError,
+	KYBER_POLYVECBYTES,
+	KYBER_SYMBYTES,
+	KyberEncapsulation,
+	KyberKeyPair,
+	KyberPrivateKey,
+	KyberPublicKey,
+	random,
+} from "@tutao/tutanota-crypto"
+import { decapsulate, encapsulate, generateKeyPair } from "@tutao/tutanota-crypto/dist/encryption/Liboqs/Kyber.js"
 
 assertWorkerOrNode()
 
@@ -36,8 +44,13 @@ export interface KyberFacade {
  * WebAssembly implementation of Liboqs
  */
 export class WASMKyberFacade implements KyberFacade {
+	constructor(private readonly testWASM?: WebAssembly.Exports) {}
+
 	// loads liboqs WASM
 	private liboqs: LazyLoaded<WebAssembly.Exports> = new LazyLoaded(async () => {
+		if (this.testWASM) {
+			return this.testWASM
+		}
 		const wasm = fetch("wasm/liboqs.wasm")
 		if (WebAssembly.instantiateStreaming) {
 			return (await WebAssembly.instantiateStreaming(wasm)).instance.exports
@@ -81,12 +94,49 @@ export class NativeKyberFacade implements KyberFacade {
 	}
 }
 
+export function kyberPrivateKeyToHex(key: KyberPrivateKey): Hex {
+	const keyBytes = key.raw
+	//liboqs: s, t, rho, hpk, nonce
+	//encoded: s, hpk, nonce, t, rho
+	const s = keyBytes.slice(0, KYBER_POLYVECBYTES)
+	const t = keyBytes.slice(KYBER_POLYVECBYTES, 2 * KYBER_POLYVECBYTES)
+	const rho = keyBytes.slice(2 * KYBER_POLYVECBYTES, 2 * KYBER_POLYVECBYTES + KYBER_SYMBYTES)
+	const hpk = keyBytes.slice(2 * KYBER_POLYVECBYTES + KYBER_SYMBYTES, 2 * KYBER_POLYVECBYTES + 2 * KYBER_SYMBYTES)
+	const nonce = keyBytes.slice(2 * KYBER_POLYVECBYTES + 2 * KYBER_SYMBYTES, 2 * KYBER_POLYVECBYTES + 3 * KYBER_SYMBYTES)
+	return formatHexString([s, hpk, nonce, t, rho])
+}
+
+export function kyberPublicKeyToHex(key: KyberPublicKey): Hex {
+	const keyComponents: Uint8Array[] = []
+	const keyBytes = key.raw
+	keyComponents.push(keyBytes.slice(0, KYBER_POLYVECBYTES))
+	keyComponents.push(keyBytes.slice(KYBER_POLYVECBYTES, KYBER_POLYVECBYTES + KYBER_SYMBYTES))
+	return formatHexString(keyComponents)
+}
+
+function formatHexString(keyComponent: Uint8Array[]): Hex {
+	let result = ""
+	for (const comp of keyComponent) {
+		const hex = uint8ArrayToHex(comp)
+		result += getHexLen(hex) + hex
+	}
+	return result
+}
+
+function getHexLen(data: Hex): Hex {
+	let hexLen = data.length.toString(16)
+	while (hexLen.length < 4) {
+		hexLen = "0" + hexLen
+	}
+	return hexLen
+}
+
 export function hexToKyberPublicKey(hex: Hex): KyberPublicKey {
 	const keyComponents = _hexToKyberKeyArray(hex)
 	if (keyComponents.length != 2) {
 		throw new Error("invalid public key hex encoding")
 	}
-
+	// key is expected by oqs in the same order t, rho
 	return { raw: concat(...keyComponents) }
 }
 
