@@ -304,7 +304,7 @@ export class LoginViewModel implements ILoginViewModel {
 
 			// we don't want to auto-login on the legacy domain, there's a banner
 			// there to move people to the new domain.
-			if (this._autoLoginCredentials && !isLegacyDomain()) {
+			if (this._autoLoginCredentials) {
 				const credentials = await this.credentialsProvider.getCredentialsByUserId(this._autoLoginCredentials.userId)
 
 				if (credentials) {
