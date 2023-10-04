@@ -5,6 +5,7 @@ import { ExternalImageRule } from "../../../common/TutanotaConstants.js"
 import { aesDecrypt, aes256RandomKey, decryptKey, encryptKey, IV_BYTE_LENGTH, random } from "@tutao/tutanota-crypto"
 import { UserFacade } from "../UserFacade.js"
 import { Metadata, ObjectStoreName } from "../../search/IndexTables.js"
+// fixme
 import { aesEncrypt } from "@tutao/tutanota-crypto/dist/encryption/Aes.js"
 
 const VERSION: number = 2

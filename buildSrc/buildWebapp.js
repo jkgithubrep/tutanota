@@ -95,7 +95,7 @@ export async function buildWebapp({ version, stage, host, measure, minify, proje
 	const output = await bundle.write({
 		sourcemap: true,
 		format: "system",
-		dir: "build/dist",
+		dir: "build",
 		manualChunks(id, { getModuleInfo, getModuleIds }) {
 			return getChunkName(id, { getModuleInfo })
 		},

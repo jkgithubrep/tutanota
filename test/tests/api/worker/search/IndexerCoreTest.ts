@@ -36,6 +36,7 @@ import { makeCore } from "../../../TestUtils.js"
 import { aesDecrypt, aes256RandomKey, fixedIv, IV_BYTE_LENGTH, random } from "@tutao/tutanota-crypto"
 import { resolveTypeReference } from "../../../../../src/api/common/EntityFunctions.js"
 import { ElementDataOS, GroupDataOS, SearchIndexMetaDataOS, SearchIndexOS } from "../../../../../src/api/worker/search/IndexTables.js"
+// fixme
 import { aesEncrypt } from "@tutao/tutanota-crypto/dist/encryption/Aes.js"
 
 const mailTypeInfo = typeRefToTypeInfo(MailTypeRef)

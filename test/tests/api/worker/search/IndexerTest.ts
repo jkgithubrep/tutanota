@@ -37,6 +37,7 @@ import { EntityClient } from "../../../../../src/api/common/EntityClient.js"
 import { ContactIndexer } from "../../../../../src/api/worker/search/ContactIndexer.js"
 import { InfoMessageHandler } from "../../../../../src/gui/InfoMessageHandler.js"
 import { GroupDataOS, Metadata, MetaDataOS } from "../../../../../src/api/worker/search/IndexTables.js"
+// fixme
 import { aesEncrypt } from "@tutao/tutanota-crypto/dist/encryption/Aes.js"
 
 const SERVER_TIME = new Date("1994-06-08").getTime()
