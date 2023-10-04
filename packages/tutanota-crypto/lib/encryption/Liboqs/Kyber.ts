@@ -1,6 +1,6 @@
 import { KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey } from "./KyberKeyPair.js"
 import { stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
-import { random } from "../../random/Randomizer.js"
+import { random, Randomizer } from "../../random/Randomizer.js"
 
 const KYBER_ALGORITHM = "Kyber1024"
 const OQS_KEM_kyber_1024_length_public_key = 1568
@@ -11,7 +11,7 @@ const OQS_KEM_kyber_1024_length_shared_secret = 32
 /**
  * @returns a new random kyber key pair.
  */
-export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
+export function generateKeyPair(kyberWasm: WebAssembly.Exports, randomizer: Randomizer): KyberKeyPair {
 	const memory: WebAssembly.Memory = kyberWasm.memory as WebAssembly.Memory
 	const free = kyberWasm.free as FreeFN
 	const malloc = kyberWasm.malloc as MallocFN
@@ -24,7 +24,7 @@ export function generateKeyPair(kyberWasm: WebAssembly.Exports): KyberKeyPair {
 
 	const OQS_KEM = createKem(kyberWasm, malloc, free)
 	try {
-		fillEntropyPool(memory, TUTA_inject_entropy, malloc, free)
+		fillEntropyPool(memory, TUTA_inject_entropy, malloc, free, randomizer)
 
 		if (isNull(publicKeyBuf) || isNull(privateKeyBuf)) {
 			throw new Error("kyber key generation malloc failure")
@@ -75,7 +75,7 @@ function createKem(kyberWasm: WebAssembly.Exports, malloc: MallocFN, free: FreeF
 	}
 }
 
-export function encapsulate(kyberWasm: WebAssembly.Exports, publicKey: KyberPublicKey): KyberEncapsulation {
+export function encapsulate(kyberWasm: WebAssembly.Exports, publicKey: KyberPublicKey, randomizer: Randomizer): KyberEncapsulation {
 	const memory = kyberWasm.memory as WebAssembly.Memory
 	const free = kyberWasm.free as FreeFN
 	const malloc = kyberWasm.malloc as MallocFN
@@ -91,7 +91,7 @@ export function encapsulate(kyberWasm: WebAssembly.Exports, publicKey: KyberPubl
 	try {
 		OQS_KEM = createKem(kyberWasm, malloc, free)
 
-		fillEntropyPool(memory, TUTA_inject_entropy, malloc, free)
+		fillEntropyPool(memory, TUTA_inject_entropy, malloc, free, randomizer)
 		if (isNull(cipherTextPtr) || isNull(sharedSecretPtr)) {
 			throw new Error("kyber key generation malloc failure")
 		}
@@ -191,14 +191,14 @@ function isNull(array: Uint8Array): boolean {
 }
 
 // Add bytes externally to the random number generator
-function fillEntropyPool(memory: WebAssembly.Memory, TUTA_inject_entropy: TUTA_inject_entropy_RawFN, malloc: MallocFN, free: FreeFN) {
+function fillEntropyPool(memory: WebAssembly.Memory, TUTA_inject_entropy: TUTA_inject_entropy_RawFN, malloc: MallocFN, free: FreeFN, randomizer: Randomizer) {
 	const entropyNeeded = TUTA_inject_entropy(0, 0)
 	const entropyBuf = new Uint8Array(memory.buffer, malloc(entropyNeeded), entropyNeeded)
 	try {
 		if (isNull(entropyBuf)) {
 			throw new Error("entropy allocation failure")
 		}
-		entropyBuf.set(random.generateRandomData(entropyBuf.length))
+		entropyBuf.set(randomizer.generateRandomData(entropyBuf.length))
 		TUTA_inject_entropy(entropyBuf.byteOffset, entropyBuf.length)
 	} finally {
 		if (!isNull(entropyBuf)) {

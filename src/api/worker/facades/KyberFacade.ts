@@ -1,7 +1,7 @@
 import { concat, Hex, hexToUint8Array, LazyLoaded } from "@tutao/tutanota-utils"
 import { NativeCryptoFacade } from "../../../native/common/generatedipc/NativeCryptoFacade.js"
 import { assertWorkerOrNode } from "../../common/Env.js"
-import { CryptoError, KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey } from "@tutao/tutanota-crypto"
+import { CryptoError, KyberEncapsulation, KyberKeyPair, KyberPrivateKey, KyberPublicKey, random } from "@tutao/tutanota-crypto"
 import { generateKeyPair, encapsulate, decapsulate } from "@tutao/tutanota-crypto/dist/encryption/Liboqs/Kyber.js"
 import { BigInteger, parseBigInt } from "@tutao/tutanota-crypto/dist/internal/crypto-jsbn-2012-08-09_1.js"
 
@@ -49,11 +49,11 @@ export class WASMKyberFacade implements KyberFacade {
 	})
 
 	async generateKeypair(): Promise<KyberKeyPair> {
-		return generateKeyPair(await this.liboqs.getAsync())
+		return generateKeyPair(await this.liboqs.getAsync(), random)
 	}
 
 	async encapsulate(publicKey: KyberPublicKey): Promise<KyberEncapsulation> {
-		return encapsulate(await this.liboqs.getAsync(), publicKey)
+		return encapsulate(await this.liboqs.getAsync(), publicKey, random)
 	}
 
 	async decapsulate(privateKey: KyberPrivateKey, ciphertext: Uint8Array): Promise<Uint8Array> {
