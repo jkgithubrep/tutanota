@@ -1,5 +1,5 @@
 import { Aes256Key } from "../../encryption/Aes.js"
-import { callWebAssemblyFunctionWithArguments, stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
+import { callWebAssemblyFunctionWithArguments, ConstPtr, Ptr, stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
 import { uint8ArrayToBitArray } from "../../misc/Utils.js"
 import { MutableUint8Array, SecureFreeUint8Array } from "@tutao/tutanota-utils/dist/WebAssembly.js"
 
@@ -8,6 +8,18 @@ export const ARGON2ID_ITERATIONS = 4
 export const ARGON2ID_MEMORY_IN_KiB = 32 * 1024
 export const ARGON2ID_PARALLELISM = 1
 export const ARGON2ID_KEY_LENGTH = 32
+
+type Argon2IDHashRawFN = (
+	t_cost: number,
+	m_cost: number,
+	parallelism: number,
+	pwd: ConstPtr,
+	pwdlen: number,
+	salt: ConstPtr,
+	saltlen: number,
+	hash: Ptr,
+	hashlen: number,
+) => number
 
 /**
  * Create a 256-bit symmetric key from the given passphrase.
@@ -40,7 +52,7 @@ function argon2idHashRaw(
 ): Uint8Array {
 	const hash = new Uint8Array(hashLength)
 	const result = callWebAssemblyFunctionWithArguments(
-		argon2.argon2id_hash_raw as Function,
+		argon2.argon2id_hash_raw as Argon2IDHashRawFN,
 		argon2,
 		timeCost,
 		memoryCost,

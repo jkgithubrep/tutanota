@@ -8,83 +8,80 @@ import { stringToUtf8Uint8Array } from "./Encoding.js"
  * @param func function to call
  * @param exports WASM module instance's exports
  * @param args arguments to pass
+ *
+ * @return return value of the function
  */
-export function callWebAssemblyFunctionWithArguments<T>(func: Function, exports: WebAssembly.Exports, ...args: any[]): any {
+export function callWebAssemblyFunctionWithArguments<T>(
+	func: (...args: any[]) => T,
+	exports: WebAssembly.Exports,
+	...args: (string | number | Uint8Array | Int8Array | MutableUint8Array | SecureFreeUint8Array | boolean | null)[]
+): T {
 	const free = exports.free as FreeFN
 
-	const argsToPass: (number | boolean)[] = []
+	const argsToPass: number[] = []
 	const toFree: Ptr[] = []
 	const toClear: Uint8Array[] = []
-	const toOverwrite: { arr: Uint8Array; original: MutableUint8Array }[] = []
+	const toOverwrite: { arrayInWASM: Uint8Array; originalBufferYouPassedIn: MutableUint8Array }[] = []
 
 	try {
-		for (const a of args) {
-			// `NULL` in C is equal to 0
-			if (a === null) {
+		for (const arg of args) {
+			if (arg === null) {
+				// `NULL` in C is equal to 0
 				argsToPass.push(0)
-				continue
-			}
-
-			// These can be passed as-is
-			if (typeof a === "number" || typeof a === "boolean") {
-				argsToPass.push(a)
-				continue
-			}
-
-			// Strings require null termination
-			if (typeof a === "string") {
-				const s = allocateStringCopy(a, exports, toFree)
-				toFree.push(s.byteOffset)
-				toClear.push(s)
-				argsToPass.push(s.byteOffset)
-				continue
-			}
-
-			if (a instanceof MutableUint8Array) {
-				const inputOutput = a.uint8ArrayInputOutput
-				let arr: Uint8Array
-
-				if (inputOutput instanceof SecureFreeUint8Array) {
-					arr = allocateArrayCopy(inputOutput.uint8ArrayInput, exports, toFree)
-					toClear.push(arr)
-				} else {
-					arr = allocateArrayCopy(inputOutput, exports, toFree)
+			} else if (typeof arg === "number") {
+				// These can be passed as-is
+				argsToPass.push(arg)
+			} else if (typeof arg === "boolean") {
+				// Convert to number
+				argsToPass.push(arg ? 1 : 0)
+			} else if (typeof arg === "string") {
+				// Strings require null termination and copying, so we do this here
+				const s = allocateStringCopy(arg, exports, toFree)
+				try {
+					toClear.push(s)
+					argsToPass.push(s.byteOffset)
+					toFree.push(s.byteOffset)
+				} catch (e) {
+					free(s.byteOffset)
+					throw e
 				}
-
-				toOverwrite.push({ arr, original: a })
-				argsToPass.push(arr.byteOffset)
-				continue
+			} else if (arg instanceof MutableUint8Array) {
+				// Unwrap to get our original buffer back
+				const inputOutput = arg.uint8ArrayInputOutput
+				let arrayInWASM: Uint8Array
+				if (inputOutput instanceof SecureFreeUint8Array) {
+					arrayInWASM = allocateSecureArrayCopy(inputOutput.uint8ArrayInput, exports, toFree, toClear)
+				} else {
+					arrayInWASM = allocateArrayCopy(inputOutput, exports, toFree)
+				}
+				toOverwrite.push({ arrayInWASM: arrayInWASM, originalBufferYouPassedIn: arg })
+				argsToPass.push(arrayInWASM.byteOffset)
+			} else if (arg instanceof SecureFreeUint8Array) {
+				const arrayInWASM = allocateSecureArrayCopy(arg.uint8ArrayInput, exports, toFree, toClear)
+				argsToPass.push(arrayInWASM.byteOffset)
+			} else if (arg instanceof Uint8Array || arg instanceof Int8Array) {
+				const arrayInWASM = allocateArrayCopy(arg, exports, toFree)
+				argsToPass.push(arrayInWASM.byteOffset)
+			} else {
+				throw new Error(`passed an unhandled argument type ${typeof arg}`)
 			}
-
-			if (a instanceof SecureFreeUint8Array) {
-				const arr = allocateArrayCopy(a.uint8ArrayInput, exports, toFree)
-				toClear.push(arr)
-				argsToPass.push(arr.byteOffset)
-				continue
-			}
-
-			if (a instanceof Uint8Array || a instanceof Int8Array) {
-				const arr = allocateArrayCopy(a, exports, toFree)
-				argsToPass.push(arr.byteOffset)
-				continue
-			}
-
-			throw new Error(`passed an unhandled argument type ${typeof a}`)
 		}
-
 		return func(...argsToPass)
 	} finally {
+		// First copy back in the contents from the WASM memory to JavaScript
 		for (const f of toOverwrite) {
-			const inputOutput = f.original.uint8ArrayInputOutput
+			const inputOutput = f.originalBufferYouPassedIn.uint8ArrayInputOutput
 			if (inputOutput instanceof SecureFreeUint8Array) {
-				inputOutput.uint8ArrayInput.set(f.arr)
+				inputOutput.uint8ArrayInput.set(f.arrayInWASM)
 			} else {
-				inputOutput.set(f.arr)
+				inputOutput.set(f.arrayInWASM)
 			}
 		}
+		// Handle secure free buffers
 		for (const f of toClear) {
 			f.fill(0)
 		}
+		// Finally free
 		for (const f of toFree) {
 			free(f)
 		}
@@ -142,6 +139,11 @@ export class SecureFreeUint8Array {
 export type Ptr = number
 
 /**
+ * Defines a pointer type for immutable memory
+ */
+export type ConstPtr = number
+
+/**
  * Free function interface
  */
 export type FreeFN = (what: Ptr) => void
@@ -174,6 +176,18 @@ function allocateArrayCopy(arr: Uint8Array | Int8Array, exports: WebAssembly.Exp
 		free(buf.byteOffset)
 		throw e
 	}
+}
+
+function allocateSecureArrayCopy(arr: Uint8Array | Int8Array, exports: WebAssembly.Exports, toFree: Ptr[], toClear: Uint8Array[]): Uint8Array {
+	const arrayInWASM = allocateArrayCopy(arr, exports, toFree)
+	try {
+		toClear.push(arrayInWASM)
+	} catch (e) {
+		// on the off chance that push fails, we don't want the buffer to linger in memory
+		arrayInWASM.fill(0)
+		throw e
+	}
+	return arrayInWASM
 }
 
 type MallocFN = (len: number) => Ptr
