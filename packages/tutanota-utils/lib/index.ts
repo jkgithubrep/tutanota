@@ -153,7 +153,18 @@ export {
 } from "./Utils.js"
 export type { Callback, DeferredObject, lazy, lazyAsync, Thunk, DeferredObjectWithHandler, MaybeLazy, TimeoutSetter, ErrorInfo } from "./Utils.js"
 
-export { callWebAssemblyFunctionWithArguments, allocateBuffer, Ptr, ConstPtr, FreeFN, MutableUint8Array, SecureFreeUint8Array } from "./WebAssembly.js"
+export {
+	callWebAssemblyFunctionWithArguments,
+	allocateBuffer,
+	Ptr,
+	ConstPtr,
+	FreeFN,
+	MutableUint8Array,
+	SecureFreeUint8Array,
+	mutableSecureFree,
+	secureFree,
+	mutable,
+} from "./WebAssembly.js"
 
 export { mod, clamp } from "./MathUtils.js"
 

@@ -12,7 +12,7 @@ import { stringToUtf8Uint8Array } from "./Encoding.js"
  * @return return value of the function
  */
 export function callWebAssemblyFunctionWithArguments<T>(
-	func: (...args: any[]) => T,
+	func: (...args: number[]) => T,
 	exports: WebAssembly.Exports,
 	...args: (string | number | Uint8Array | Int8Array | MutableUint8Array | SecureFreeUint8Array | boolean | null)[]
 ): T {
@@ -131,6 +131,39 @@ export class MutableUint8Array {
  */
 export class SecureFreeUint8Array {
 	constructor(readonly uint8ArrayInput: Uint8Array) {}
+}
+
+/**
+ * Convenience function for wrapping an array as a MutableUint8Array.
+ *
+ * Data from the WASM module will be copied back to the array once finished.
+ * @param array array to wrap
+ * @return wrapper
+ */
+export function mutable(array: Uint8Array): MutableUint8Array {
+	return new MutableUint8Array(array)
+}
+
+/**
+ * Convenience function for wrapping an array as a MutableUint8Array and SecureFreeUint8Array.
+ *
+ * Data from the WASM module will be copied back to the array once finished, and then it will be erased from the module.
+ * @param array array to wrap
+ * @return wrapper
+ */
+export function mutableSecureFree(array: Uint8Array): MutableUint8Array {
+	return new MutableUint8Array(new SecureFreeUint8Array(array))
+}
+
+/**
+ * Convenience function for wrapping an array as a MutableUint8Array and SecureFreeUint8Array.
+ *
+ * Data from the WASM module will be erased once finished.
+ * @param array array to wrap
+ * @return wrapper
+ */
+export function secureFree(array: Uint8Array): SecureFreeUint8Array {
+	return new SecureFreeUint8Array(array)
 }
 
 /**

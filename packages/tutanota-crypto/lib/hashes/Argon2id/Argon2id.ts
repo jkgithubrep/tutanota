@@ -1,5 +1,5 @@
 import { Aes256Key } from "../../encryption/Aes.js"
-import { callWebAssemblyFunctionWithArguments, ConstPtr, Ptr, stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
+import { callWebAssemblyFunctionWithArguments, ConstPtr, mutableSecureFree, Ptr, secureFree, stringToUtf8Uint8Array } from "@tutao/tutanota-utils"
 import { uint8ArrayToBitArray } from "../../misc/Utils.js"
 import { MutableUint8Array, SecureFreeUint8Array } from "@tutao/tutanota-utils/dist/WebAssembly.js"
 
@@ -57,11 +57,11 @@ function argon2idHashRaw(
 		timeCost,
 		memoryCost,
 		parallelism,
-		new SecureFreeUint8Array(password),
+		secureFree(password),
 		password.length,
 		salt,
 		salt.length,
-		new MutableUint8Array(new SecureFreeUint8Array(hash)),
+		mutableSecureFree(hash),
 		hash.length,
 	)
 
