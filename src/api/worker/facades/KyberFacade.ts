@@ -90,13 +90,14 @@ export function hexToKyberPublicKey(hex: Hex): KyberPublicKey {
 	return { raw: concat(...keyComponents) }
 }
 
-export function hexToKyberPrivateKey(hex: Hex): KyberPublicKey {
+export function hexToKyberPrivateKey(hex: Hex): KyberPrivateKey {
 	const keyComponents = _hexToKyberKeyArray(hex)
 	if (keyComponents.length != 5) {
 		throw new Error("invalid private key hex encoding")
 	}
 
-	return { raw: concat(...keyComponents) }
+	// key is expected by oqs in this order (vs how we encode it on the server): s, t, rho, hpk, nonce
+	return { raw: concat(keyComponents[0], keyComponents[3], keyComponents[4], keyComponents[1], keyComponents[2]) }
 }
 
 function _hexToKyberKeyArray(hex: Hex): Uint8Array[] {
